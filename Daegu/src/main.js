@@ -293,6 +293,11 @@ function toggleShift() {
     }
 }
 
+// ==========================================
+// HÀM CHUYỂN TAB VÀ KÍCH HOẠT LỊCH TIẾNG VIỆT
+// ==========================================
+let isDatePickerInitialized = false;
+
 function switchTab(tabName) {
     const emptyState = document.getElementById('empty-state');
     const populatedState = document.getElementById('populated-state');
@@ -322,7 +327,34 @@ function switchTab(tabName) {
         populatedState.classList.add('hidden');
         khuvucHeader.classList.add('hidden');
         dashboardState.classList.remove('hidden');
-        document.getElementById('report-date').value = new Date().toISOString().split('T')[0];
+        
+        // KÍCH HOẠT LỊCH FLATPICKR (CHỈ CHẠY 1 LẦN)
+        if (!isDatePickerInitialized) {
+            flatpickr("#report-date", {
+                locale: "vn", // Ép tiếng Việt 100%
+                dateFormat: "Y-m-d", // Chuẩn định dạng để nhét vào Supabase
+                defaultDate: "today", // Mặc định hiển thị ngày hôm nay
+                disableMobile: "true", // Giữ giao diện đẹp trên cả điện thoại
+                onChange: function(selectedDates, dateStr, instance) {
+                    // Khi người dùng chọn ngày xong, tự động đổi tên hiển thị và tính tiền
+                    document.getElementById('display-date').innerText = formatDateVN(dateStr);
+                    loadDashboard(); 
+                }
+            });
+            
+            // Bấm vào cái khung là bung lịch ra
+            document.getElementById('custom-date-btn').addEventListener('click', function() {
+                document.getElementById('report-date')._flatpickr.open();
+            });
+
+            isDatePickerInitialized = true;
+        }
+
+        // Tự động load dữ liệu ngày hôm nay khi vừa nhảy sang Tab Nhà hàng
+        const todayStr = getLocalDateString();
+        document.getElementById('display-date').innerText = formatDateVN(todayStr);
+        document.getElementById('report-date').value = todayStr;
+        loadDashboard(); 
     }
 }
 
@@ -413,3 +445,51 @@ grid.addEventListener('touchstart', (e) => {
 });
 grid.addEventListener('touchend', () => clearTimeout(pressTimer));
 grid.addEventListener('touchmove', () => clearTimeout(pressTimer));
+
+// ==========================================
+// CÁC HÀM XỬ LÝ NGÀY THÁNG CHUẨN VIỆT NAM
+// ==========================================
+function getLocalDateString() {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+}
+
+function formatDateVN(dateString) {
+    if (!dateString) return '--/--/----';
+    const [y, m, d] = dateString.split('-');
+    return `${d}/${m}/${y}`;
+}
+
+// ==========================================
+// LOGIC TẢI BÁO CÁO DOANH THU (Đã fix lỗi ngày tháng)
+// ==========================================
+async function loadDashboard() {
+    const selectedDate = document.getElementById('report-date').value;
+    if (!selectedDate) return;
+
+    // Ép giao diện hiển thị chuẩn DD/MM/YYYY
+    document.getElementById('display-date').innerText = formatDateVN(selectedDate);
+
+    const startOfDay = new Date(`${selectedDate}T00:00:00+07:00`).toISOString();
+    const endOfDay = new Date(`${selectedDate}T23:59:59+07:00`).toISOString();
+
+    const { data: receipts, error } = await supabaseClient
+        .from('receipts')
+        .select('total_amount')
+        .gte('created_at', startOfDay)
+        .lte('created_at', endOfDay);
+
+    if (error) {
+        console.error("Lỗi tải báo cáo:", error);
+        return;
+    }
+
+    const totalRevenue = receipts.reduce((sum, r) => sum + r.total_amount, 0);
+    const totalOrders = receipts.length;
+
+    document.getElementById('dashboard-revenue').innerText = totalRevenue.toLocaleString() + ' đ';
+    document.getElementById('dashboard-orders').innerText = totalOrders + ' đơn';
+}

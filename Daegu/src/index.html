@@ -6,6 +6,7 @@
     <title>POS Daegu</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 </head>
 <body class="bg-[#f5f5f5] h-screen flex flex-col font-sans text-sm pb-14 overflow-hidden">
 
@@ -29,21 +30,25 @@
     </div>
 
     <div id="dashboard-state" class="hidden flex-1 overflow-y-auto bg-gray-50">
+        
         <div class="bg-gradient-to-r from-[#0056a3] to-[#0070d2] p-5 text-white shadow-md">
             <h2 class="text-lg font-bold mb-3">Tổng quan doanh thu</h2>
-            <div class="flex items-center bg-white/20 rounded-lg p-1 w-max">
-                <input type="date" id="report-date" class="bg-transparent text-white outline-none px-2 py-1 font-medium cursor-pointer [color-scheme:dark]">
+            
+            <div id="custom-date-btn" class="relative flex items-center bg-white/20 rounded-lg p-2 w-max cursor-pointer hover:bg-white/30 transition">
+                <span id="display-date" class="font-medium px-2 tracking-wide">--/--/----</span>
+                <svg class="w-5 h-5 ml-1 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                <input type="text" id="report-date" class="hidden">
             </div>
         </div>
 
         <div class="grid grid-cols-2 gap-3 p-4">
             <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center">
                 <p class="text-xs text-gray-500 font-medium mb-1">Tổng doanh thu</p>
-                <p class="text-xl font-bold text-[#0056a3]">4.250.000 đ</p>
+                <p id="dashboard-revenue" class="text-xl font-bold text-[#0056a3]">0 đ</p>
             </div>
             <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center">
                 <p class="text-xs text-gray-500 font-medium mb-1">Số hóa đơn</p>
-                <p class="text-xl font-bold text-gray-800">18 đơn</p>
+                <p id="dashboard-orders" class="text-xl font-bold text-gray-800">0 đơn</p>
             </div>
         </div>
 
@@ -159,6 +164,8 @@
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/vn.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="main.js"></script>
 </body>

@@ -482,25 +482,41 @@ function calculateChange() {
     }
 }
 
+// ==========================================
+// HÀM THANH TOÁN (LƯU VÀO KÉT SẮT SUPABASE)
+// ==========================================
 async function confirmPayment() {
     const cash = parseInt(document.getElementById('pay-customer-cash').value) || 0;
     if (cash < finalBillTotal) return alert("Khách đưa chưa đủ tiền thanh toán!");
+    const changeAmount = cash - finalBillTotal;
 
-    // 1. Thực hiện lệnh Xóa bàn trên Supabase
-    // Vì bảng order_items đã set ON DELETE CASCADE, nên chỉ cần xóa bàn là toàn bộ món ăn sẽ tự động bốc hơi theo.
-    const { error } = await supabaseClient.from('tables_active').delete().eq('table_num', currentTable);
-    
-    if (error) {
-        console.error(error);
-        return alert("Lỗi khi chốt bill trên máy chủ: " + error.message);
-    }
+    // 1. Lấy mã order_id của bàn này trước khi xóa
+    const { data: tableData } = await supabaseClient.from('tables_active').select('order_id').eq('table_num', currentTable).single();
+    const orderId = tableData ? tableData.order_id : 'UNKNOWN';
 
-    // 2. Nếu thành công, in bill và quay về trang chủ
-    console.log(`Đã in hóa đơn Bàn ${currentTable}. Tổng: ${finalBillTotal}, Giảm: ${discountData.value}`);
+    // 2. Tóm tắt các món khách đã ăn (Lưu dạng JSON)
+    const itemsSummary = cart.map(item => ({
+        name: item.name,
+        qty: item.quantity,
+        price: item.currentPrice
+    }));
+
+    // 3. ĐẨY HÓA ĐƠN VÀO KÉT SẮT (Bảng receipts)
+    const { error: receiptErr } = await supabaseClient.from('receipts').insert([{
+        order_id: orderId,
+        table_num: currentTable,
+        total_amount: finalBillTotal,
+        discount_amount: discountData.value,
+        cash_received: cash,
+        change_returned: changeAmount,
+        items_summary: itemsSummary
+    }]);
+
+    if (receiptErr) return alert("Lỗi lưu hóa đơn: " + receiptErr.message);
+
+    // 4. Xóa bàn khỏi màn hình (Món ăn tự động biến mất theo)
+    await supabaseClient.from('tables_active').delete().eq('table_num', currentTable);
+
+    alert(`✅ Đã thanh toán thành công Bàn ${currentTable}!\nTổng thu: ${finalBillTotal.toLocaleString()} đ`);
     window.location.href = 'index.html';
-}
-
-function goBack() { 
-    console.log("Đã gửi lệnh in Bếp!");
-    window.location.href = 'index.html'; 
 }
