@@ -6,6 +6,12 @@
     <title>Gọi Món - POS Daegu</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="POS Daegu">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3081/3081333.png">
 </head>
 <body class="bg-gray-100 h-screen flex flex-col font-sans overflow-hidden">
 
@@ -25,8 +31,9 @@
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"></path></svg>
                 Món tùy chọn
             </button>
-            <div class="w-2/3">
-                <input type="text" placeholder="Tìm tên món..." class="w-full bg-gray-100 border-none rounded-full px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-[#0056a3]/30 transition">
+            <div class="w-2/3 relative">
+                <svg class="w-4 h-4 absolute left-3 top-2.5 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                <input type="text" id="search-input" oninput="searchMenu()" autocomplete="off" placeholder="Tìm tên món (VD: mi bo)..." class="w-full bg-gray-100 border-none rounded-full pl-9 pr-4 py-2 text-sm outline-none focus:ring-2 focus:ring-[#0056a3]/30 transition">
             </div>
         </div>
     </div>
@@ -34,12 +41,10 @@
     <div class="flex flex-1 overflow-hidden">
         
         <div class="w-[70%] bg-[#f5f5f5] flex flex-col border-r border-gray-200">
-            <div class="flex gap-2 p-4 overflow-x-auto shrink-0 bg-white shadow-sm hide-scrollbar">
-                <button class="px-5 py-2 rounded-full text-sm font-medium bg-[#0056a3] text-white whitespace-nowrap shadow-sm">Tất cả</button>
-                <button class="px-5 py-2 rounded-full text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 whitespace-nowrap">Đồ Nướng</button>
-                <button class="px-5 py-2 rounded-full text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 whitespace-nowrap">Lẩu</button>
-                <button class="px-5 py-2 rounded-full text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 whitespace-nowrap">Đồ Uống</button>
+            <div id="menu-categories" class="flex gap-2 p-4 overflow-x-auto shrink-0 bg-white shadow-sm hide-scrollbar">
+                <p class="text-sm text-gray-400 italic">Đang tải danh mục...</p>
             </div>
+            
             <div class="flex-1 overflow-y-auto p-4">
                 <div class="grid grid-cols-3 xl:grid-cols-4 gap-4" id="menu-grid"></div>
             </div>
@@ -92,46 +97,37 @@
         <div class="bg-white rounded-xl w-[400px] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
             <div class="flex justify-between items-center p-4 border-b border-gray-100 bg-gray-50">
                 <h3 id="modal-item-name" class="font-bold text-lg text-gray-800 line-clamp-1">Tên món</h3>
-                <button onclick="closeItemOptions()" class="text-gray-400 hover:text-red-500 transition p-1">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path></svg>
-                </button>
+                <button onclick="closeItemOptions()" class="text-gray-400 hover:text-red-500 transition p-1"><svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path></svg></button>
             </div>
-            
             <div class="p-4 overflow-y-auto flex-1">
                 <div class="flex items-center justify-between mb-6 bg-gray-50 p-3 rounded-lg border border-gray-100">
                     <span class="font-medium text-gray-700">Số lượng</span>
                     <div class="flex items-center gap-3">
-                        <button onclick="changeModalQty(-1)" class="w-8 h-8 rounded-full bg-white border border-gray-300 flex items-center justify-center text-lg font-bold text-gray-600 hover:bg-gray-100 active:scale-95">-</button>
+                        <button onclick="changeModalQty(-1)" class="w-8 h-8 rounded-full bg-white border border-gray-300 flex items-center justify-center text-lg font-bold text-gray-600">-</button>
                         <span id="modal-item-qty" class="w-6 text-center font-bold text-lg">1</span>
-                        <button onclick="changeModalQty(1)" class="w-8 h-8 rounded-full bg-white border border-gray-300 flex items-center justify-center text-lg font-bold text-[#0056a3] hover:bg-blue-50 active:scale-95">+</button>
+                        <button onclick="changeModalQty(1)" class="w-8 h-8 rounded-full bg-white border border-gray-300 flex items-center justify-center text-lg font-bold text-[#0056a3]">+</button>
                     </div>
                 </div>
-
                 <div id="modal-topping-section" class="mb-6">
                     <div class="flex justify-between items-center mb-2">
                         <h4 class="font-medium text-gray-700 text-sm">Topping / Món thêm</h4>
                         <button onclick="toggleCustomToppingForm()" class="text-xs font-bold text-orange-500 hover:text-orange-600 transition">+ Topping tùy chọn</button>
                     </div>
-                    
                     <div id="custom-topping-form" class="hidden flex gap-2 mb-3 bg-orange-50 p-2 rounded-lg border border-orange-200">
-                        <input type="text" id="custom-topping-name" placeholder="Tên topping..." class="flex-1 border border-gray-300 rounded px-2 py-1.5 text-sm outline-none focus:border-orange-500">
-                        <input type="number" id="custom-topping-price" placeholder="Giá (đ)" class="w-24 border border-gray-300 rounded px-2 py-1.5 text-sm outline-none focus:border-orange-500">
-                        <button onclick="addCustomTopping()" class="bg-orange-500 text-white px-3 py-1.5 rounded text-sm font-bold active:bg-orange-600">Thêm</button>
+                        <input type="text" id="custom-topping-name" autocomplete="off" placeholder="Tên topping..." class="flex-1 border border-gray-300 rounded px-2 py-1.5 text-sm outline-none focus:border-orange-500">
+                        <input type="number" id="custom-topping-price" autocomplete="off" placeholder="Giá (đ)" class="w-24 border border-gray-300 rounded px-2 py-1.5 text-sm outline-none focus:border-orange-500">
+                        <button onclick="addCustomTopping()" class="bg-orange-500 text-white px-3 py-1.5 rounded text-sm font-bold">Thêm</button>
                     </div>
-
                     <div id="modal-topping-list" class="flex flex-col gap-2"></div>
                 </div>
-
                 <div>
                     <h4 class="font-medium text-gray-700 mb-2 text-sm">Ghi chú (Tùy chọn)</h4>
-                    <textarea id="modal-item-note" rows="3" placeholder="Ví dụ: Ít cay, không hành..." class="w-full border border-gray-300 rounded-lg p-3 text-sm outline-none focus:border-[#0056a3] focus:ring-1 focus:ring-[#0056a3] resize-none"></textarea>
+                    <textarea id="modal-item-note" autocomplete="off" rows="3" placeholder="Ví dụ: Ít cay, không hành..." class="w-full border border-gray-300 rounded-lg p-3 text-sm outline-none focus:border-[#0056a3] resize-none"></textarea>
                 </div>
             </div>
-
             <div class="p-4 border-t border-gray-100 bg-white">
-                <button onclick="saveItemToCart()" class="w-full py-3 bg-[#0056a3] text-white rounded-lg font-bold text-base active:bg-blue-800 transition shadow-md flex justify-between px-4">
-                    <span>Thêm vào giỏ</span>
-                    <span id="modal-temp-total">0 đ</span>
+                <button onclick="saveItemToCart()" class="w-full py-3 bg-[#0056a3] text-white rounded-lg font-bold text-base shadow-md flex justify-between px-4">
+                    <span>Thêm vào giỏ</span><span id="modal-temp-total">0 đ</span>
                 </button>
             </div>
         </div>
@@ -140,31 +136,29 @@
     <div id="custom-item-modal" class="hidden fixed inset-0 bg-black/60 z-[60] flex items-center justify-center">
         <div class="bg-white rounded-xl w-[350px] shadow-2xl p-5">
             <h3 class="font-bold text-lg text-gray-800 mb-4 text-center border-b pb-3">Thêm món tùy chọn</h3>
-            
             <div class="space-y-3 mb-5">
                 <div>
                     <label class="block text-xs font-medium text-gray-500 mb-1">Tên món *</label>
-                    <input type="text" id="custom-name" placeholder="Ví dụ: Phí phục vụ, Bật lửa..." class="w-full border border-gray-300 rounded p-2 text-sm outline-none focus:border-orange-500">
+                    <input type="text" id="custom-name" autocomplete="off" placeholder="Ví dụ: Phí phục vụ..." class="w-full border border-gray-300 rounded p-2 text-sm outline-none focus:border-orange-500">
                 </div>
                 <div class="flex gap-3">
                     <div class="flex-1">
                         <label class="block text-xs font-medium text-gray-500 mb-1">Giá tiền (đ) *</label>
-                        <input type="number" id="custom-price" placeholder="0" class="w-full border border-gray-300 rounded p-2 text-sm outline-none focus:border-orange-500">
+                        <input type="number" id="custom-price" autocomplete="off" placeholder="0" class="w-full border border-gray-300 rounded p-2 text-sm outline-none focus:border-orange-500">
                     </div>
                     <div class="w-20">
                         <label class="block text-xs font-medium text-gray-500 mb-1">Số lượng</label>
-                        <input type="number" id="custom-qty" value="1" min="1" class="w-full border border-gray-300 rounded p-2 text-sm outline-none text-center focus:border-orange-500">
+                        <input type="number" id="custom-qty" autocomplete="off" value="1" min="1" class="w-full border border-gray-300 rounded p-2 text-sm outline-none text-center">
                     </div>
                 </div>
                 <div>
                     <label class="block text-xs font-medium text-gray-500 mb-1">Ghi chú</label>
-                    <input type="text" id="custom-note" placeholder="Tùy chọn..." class="w-full border border-gray-300 rounded p-2 text-sm outline-none focus:border-orange-500">
+                    <input type="text" id="custom-note" autocomplete="off" placeholder="Tùy chọn..." class="w-full border border-gray-300 rounded p-2 text-sm outline-none focus:border-orange-500">
                 </div>
             </div>
-
             <div class="flex gap-2">
-                <button onclick="closeCustomItemModal()" class="flex-1 py-2 bg-gray-100 text-gray-600 rounded font-medium active:bg-gray-200">Hủy</button>
-                <button onclick="saveCustomItem()" class="flex-1 py-2 bg-orange-500 text-white rounded font-medium shadow-md active:bg-orange-600">Thêm Món</button>
+                <button onclick="closeCustomItemModal()" class="flex-1 py-2 bg-gray-100 text-gray-600 rounded font-medium">Hủy</button>
+                <button onclick="saveCustomItem()" class="flex-1 py-2 bg-orange-500 text-white rounded font-medium shadow-md">Thêm Món</button>
             </div>
         </div>
     </div>
@@ -172,20 +166,17 @@
     <div id="discount-modal" class="hidden fixed inset-0 bg-black/60 z-[70] flex items-center justify-center">
         <div class="bg-white rounded-xl w-[320px] shadow-2xl p-5">
             <h3 class="font-bold text-lg text-gray-800 mb-4 text-center">Giảm giá Hóa đơn</h3>
-            
             <div class="flex gap-1 p-1 bg-gray-100 rounded-lg mb-4">
-                <button id="btn-discount-percent" onclick="setDiscountType('percent')" class="flex-1 py-1.5 bg-white shadow-sm rounded text-sm font-bold text-[#0056a3] transition-all">% Phần trăm</button>
-                <button id="btn-discount-amount" onclick="setDiscountType('amount')" class="flex-1 py-1.5 rounded text-sm font-medium text-gray-500 transition-all">VNĐ Số tiền</button>
+                <button id="btn-discount-percent" onclick="setDiscountType('percent')" class="flex-1 py-1.5 bg-white shadow-sm rounded text-sm font-bold text-[#0056a3]"># Phần trăm</button>
+                <button id="btn-discount-amount" onclick="setDiscountType('amount')" class="flex-1 py-1.5 rounded text-sm font-medium text-gray-500">VNĐ Số tiền</button>
             </div>
-
             <div class="mb-5 relative">
-                <input type="number" id="discount-input" placeholder="Nhập số..." class="w-full border border-gray-300 rounded-lg px-3 py-3 text-lg font-bold text-center outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500">
+                <input type="number" id="discount-input" autocomplete="off" placeholder="Nhập số..." class="w-full border border-gray-300 rounded-lg px-3 py-3 text-lg font-bold text-center outline-none focus:border-orange-500">
                 <span id="discount-unit" class="absolute right-4 top-3.5 text-gray-400 font-bold">%</span>
             </div>
-
             <div class="flex gap-2">
-                <button onclick="closeDiscountModal()" class="flex-1 py-2.5 bg-gray-100 text-gray-600 rounded-lg font-medium active:bg-gray-200">Hủy</button>
-                <button onclick="applyDiscount()" class="flex-1 py-2.5 bg-orange-500 text-white rounded-lg font-bold shadow-md active:bg-orange-600">Áp dụng</button>
+                <button onclick="closeDiscountModal()" class="flex-1 py-2.5 bg-gray-100 text-gray-600 rounded-lg font-medium">Hủy</button>
+                <button onclick="applyDiscount()" class="flex-1 py-2.5 bg-orange-500 text-white rounded-lg font-bold shadow-md">Áp dụng</button>
             </div>
         </div>
     </div>
@@ -196,21 +187,18 @@
                 <h3 class="font-bold text-lg text-white opacity-90">Thanh toán Bàn <span id="pay-table-name"></span></h3>
                 <p class="text-3xl font-bold text-white mt-1" id="pay-total-amount">0 đ</p>
             </div>
-            
             <div class="p-5">
                 <div class="mb-4">
                     <label class="block text-sm font-medium text-gray-500 mb-1">Tiền khách đưa (VNĐ)</label>
-                    <input type="number" id="pay-customer-cash" oninput="calculateChange()" placeholder="Nhập số tiền..." class="w-full border border-gray-300 rounded-lg px-4 py-3 text-xl font-bold text-gray-800 outline-none focus:border-[#0056a3] focus:ring-1 focus:ring-[#0056a3]">
+                    <input type="number" id="pay-customer-cash" autocomplete="off" oninput="calculateChange()" placeholder="Nhập số tiền..." class="w-full border border-gray-300 rounded-lg px-4 py-3 text-xl font-bold text-gray-800 outline-none focus:border-[#0056a3]">
                 </div>
-
                 <div class="flex justify-between items-center p-4 bg-gray-50 border border-gray-100 rounded-lg mb-6">
                     <span class="font-medium text-gray-600">Tiền thừa trả khách:</span>
                     <span class="text-xl font-bold text-green-600" id="pay-change-amount">0 đ</span>
                 </div>
-
                 <div class="flex gap-3">
-                    <button onclick="closePaymentModal()" class="w-1/3 py-3 bg-gray-200 text-gray-700 rounded-lg font-bold active:bg-gray-300">Quay lại</button>
-                    <button onclick="confirmPayment()" class="w-2/3 py-3 bg-[#0056a3] text-white rounded-lg font-bold shadow-md active:bg-blue-800 flex justify-center items-center gap-2">
+                    <button onclick="closePaymentModal()" class="w-1/3 py-3 bg-gray-200 text-gray-700 rounded-lg font-bold">Quay lại</button>
+                    <button onclick="confirmPayment()" class="w-2/3 py-3 bg-[#0056a3] text-white rounded-lg font-bold shadow-md flex justify-center items-center gap-2">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
                         IN BILL & CHỐT
                     </button>

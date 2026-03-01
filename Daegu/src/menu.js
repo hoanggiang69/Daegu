@@ -1,29 +1,16 @@
 // --- KẾT NỐI SUPABASE ---
-// Nhớ dán URL và API KEY của bạn vào 2 dòng này nhé!
 const SUPABASE_URL = 'https://ozlyjhhtchxsjkhmiyuw.supabase.co'; 
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im96bHlqaGh0Y2h4c2praG1peXV3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIzNDQ1NjMsImV4cCI6MjA4NzkyMDU2M30.SHvMOBG7lFz7b-igzY91CFQqhU-i5hlqAErPG5vkT2g';
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// Data Món ăn giả lập
-const MENU_ITEMS = [
-    { id: 'm1', name: 'Ba chỉ bò Mỹ nướng', price: 89000, vipPrice: 109000, img: '🥩', toppings: [] },
-    { id: 'm2', name: 'Thịt heo Iberico', price: 129000, vipPrice: 159000, img: '🥓', toppings: [] },
-    { id: 'm3', name: 'Lẩu Thái Tomyum', price: 250000, vipPrice: 280000, img: '🥘', toppings: [
-        { id: 't1', name: 'Thêm mì tôm', price: 10000 },
-        { id: 't2', name: 'Thêm đậu hũ', price: 15000 },
-        { id: 't3', name: 'Nước lẩu thêm', price: 0 }
-    ]},
-    { id: 'm4', name: 'Trà Sữa Oolong', price: 35000, vipPrice: 45000, img: '🧋', toppings: [
-        { id: 't4', name: 'Trân châu trắng', price: 10000 },
-        { id: 't5', name: 'Up size L', price: 15000 }
-    ]},
-    { id: 'm7', name: 'Mì Cay Hải Sản', price: 55000, vipPrice: 70000, img: '🍜', toppings: [
-        { id: 't6', name: 'Thêm nửa gói mì', price: 5000 },
-        { id: 't7', name: 'Thêm xúc xích', price: 10000 },
-        { id: 't8', name: 'Cấp 7', price: 0 }
-    ]}
-];
+// ==========================================
+// CÁC BIẾN TOÀN CỤC
+// ==========================================
+let allCategories = [];
+let allMenuItems = [];
+let activeCategoryId = 'all';
+let currentSearchTerm = ''; // Biến lưu từ khóa tìm kiếm
 
 let cart = [];
 let currentTable = '';
@@ -33,11 +20,21 @@ let activeMenuItem = null;
 let modalQuantity = 1;
 let modalBasePrice = 0;
 
-let discountData = { type: 'percent', value: 0 }; // Lưu thông tin giảm giá
-let finalBillTotal = 0; // Tổng tiền cuối cùng sau khi giảm
+let discountData = { type: 'percent', value: 0 }; 
+let finalBillTotal = 0; 
 
 // ==========================================
-// KHI TRANG LOAD: LẤY BÀN & TẢI GIỎ HÀNG TỪ MÂY
+// HÀM CHUYỂN ĐỔI TIẾNG VIỆT KHÔNG DẤU
+// ==========================================
+function removeVietnameseTones(str) {
+    if (!str) return '';
+    return str.normalize('NFD') // Tách dấu ra khỏi chữ cái
+              .replace(/[\u0300-\u036f]/g, '') // Xóa hết các dấu tách rời
+              .replace(/đ/g, 'd').replace(/Đ/g, 'D'); // Chuyển chữ đ riêng biệt
+}
+
+// ==========================================
+// KHI TRANG LOAD: KÉO THỰC ĐƠN VÀ GIỎ HÀNG TỪ MÂY
 // ==========================================
 window.onload = async () => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -47,42 +44,88 @@ window.onload = async () => {
     const vipTag = isVipTable ? '<span class="text-red-500 text-sm ml-2 font-bold px-2 py-0.5 bg-red-100 rounded">(VIP)</span>' : '';
     document.getElementById('table-title').innerHTML = `Bàn ${currentTable} ${vipTag}`;
     
-    renderMenu();
+    await loadMenuDataFromCloud();
     await loadCartFromCloud(); 
 };
 
-async function loadCartFromCloud() {
-    const { data, error } = await supabaseClient
-        .from('order_items')
-        .select('*')
-        .eq('table_num', currentTable)
-        .order('created_at', { ascending: true });
+// --- TẢI DANH MỤC & MÓN ĂN TỪ DB ---
+async function loadMenuDataFromCloud() {
+    const { data: cats } = await supabaseClient.from('menu_categories').select('*').order('sort_order', { ascending: true });
+    allCategories = cats || [];
 
-    if (error) {
-        console.error(error);
-        return alert("Lỗi tải giỏ hàng từ máy chủ!");
-    }
+    const { data: items } = await supabaseClient.from('menu_items').select('*').eq('is_active', true).order('created_at', { ascending: false });
+    allMenuItems = items || [];
 
-    cart = data.map(item => ({
-        db_id: item.id, 
-        id: item.item_id,
-        name: item.name,
-        currentPrice: item.price,
-        quantity: item.quantity,
-        toppings: item.toppings || [],
-        note: item.note || '',
-        isServed: item.is_served,
-        isCustom: item.is_custom
-    }));
-    
-    renderCart();
+    renderCategoryButtons();
+    renderMenu();
 }
 
+// --- VẼ CÁC NÚT LỌC DANH MỤC ---
+function renderCategoryButtons() {
+    const catContainer = document.getElementById('menu-categories');
+    catContainer.innerHTML = '';
+
+    const allBtnClass = activeCategoryId === 'all'
+        ? 'px-5 py-2 rounded-full text-sm font-medium bg-[#0056a3] text-white whitespace-nowrap shadow-sm transition'
+        : 'px-5 py-2 rounded-full text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 whitespace-nowrap transition';
+    
+    catContainer.insertAdjacentHTML('beforeend', `<button onclick="filterMenu('all')" class="${allBtnClass}">Tất cả</button>`);
+
+    allCategories.forEach(cat => {
+        const btnClass = activeCategoryId === cat.id
+            ? 'px-5 py-2 rounded-full text-sm font-medium bg-[#0056a3] text-white whitespace-nowrap shadow-sm transition'
+            : 'px-5 py-2 rounded-full text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 whitespace-nowrap transition';
+        catContainer.insertAdjacentHTML('beforeend', `<button onclick="filterMenu('${cat.id}')" class="${btnClass}">${cat.name}</button>`);
+    });
+}
+
+// --- LOGIC TÌM KIẾM TRỰC TIẾP (ONINPUT) ---
+function searchMenu() {
+    currentSearchTerm = document.getElementById('search-input').value.trim();
+    renderMenu(); // Tự động load lại khu vực hiển thị 70%
+}
+
+// --- LỌC MÓN THEO DANH MỤC (CLICK TAB) ---
+function filterMenu(categoryId) {
+    activeCategoryId = categoryId;
+    
+    // Khi người dùng ấn đổi tab, tiện tay xóa luôn nội dung đang tìm kiếm cho gọn
+    document.getElementById('search-input').value = '';
+    currentSearchTerm = '';
+    
+    renderCategoryButtons();
+    renderMenu();
+}
+
+// --- VẼ DANH SÁCH MÓN (Kết hợp cả Lọc Tab và Tìm kiếm) ---
 function renderMenu() {
     const grid = document.getElementById('menu-grid');
     grid.innerHTML = '';
-    MENU_ITEMS.forEach(item => {
-        const displayPrice = isVipTable ? item.vipPrice : item.price;
+
+    // B1: Lọc theo Category trước
+    let filteredItems = activeCategoryId === 'all'
+        ? allMenuItems
+        : allMenuItems.filter(item => item.category_id === activeCategoryId);
+
+    // B2: Lọc tiếp theo Từ khóa tìm kiếm (Nếu có nhập chữ)
+    if (currentSearchTerm) {
+        // Biến từ khóa thành không dấu, in thường
+        const normalizedSearch = removeVietnameseTones(currentSearchTerm.toLowerCase());
+        
+        filteredItems = filteredItems.filter(item => {
+            // Biến tên món trong DB thành không dấu, in thường rồi so sánh
+            const normalizedName = removeVietnameseTones(item.name.toLowerCase());
+            return normalizedName.includes(normalizedSearch);
+        });
+    }
+
+    if(filteredItems.length === 0) {
+        grid.innerHTML = '<div class="col-span-full text-center text-gray-500 py-10">Không tìm thấy món nào phù hợp!</div>';
+        return;
+    }
+
+    filteredItems.forEach(item => {
+        const displayPrice = isVipTable ? item.vip_price : item.price;
         const cardHTML = `
             <div onclick="openItemOptions('${item.id}')" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden cursor-pointer hover:shadow-md active:scale-95 transition-all flex flex-col">
                 <div class="h-24 bg-gray-50 flex items-center justify-center text-5xl border-b border-gray-100">${item.img}</div>
@@ -97,12 +140,31 @@ function renderMenu() {
 }
 
 // ==========================================
+// KÉO GIỎ HÀNG TỪ MÂY
+// ==========================================
+async function loadCartFromCloud() {
+    const { data, error } = await supabaseClient.from('order_items').select('*').eq('table_num', currentTable).order('created_at', { ascending: true });
+
+    if (error) return alert("Lỗi tải giỏ hàng từ máy chủ!");
+
+    cart = data.map(item => ({
+        db_id: item.id, id: item.item_id, name: item.name, currentPrice: item.price,
+        quantity: item.quantity, toppings: item.toppings || [], note: item.note || '',
+        isServed: item.is_served, isCustom: item.is_custom
+    }));
+    
+    renderCart();
+}
+
+// ==========================================
 // LOGIC MODAL TÙY CHỈNH MÓN
 // ==========================================
 function openItemOptions(itemId) {
-    const item = MENU_ITEMS.find(i => i.id === itemId);
+    const item = allMenuItems.find(i => i.id === itemId);
+    if(!item) return;
+
     activeMenuItem = item;
-    modalBasePrice = isVipTable ? item.vipPrice : item.price;
+    modalBasePrice = isVipTable ? item.vip_price : item.price;
     modalQuantity = 1;
 
     document.getElementById('modal-item-name').innerText = item.name;
@@ -151,15 +213,12 @@ function toggleCustomToppingForm() {
 }
 
 function addCustomTopping() {
-    const nameInput = document.getElementById('custom-topping-name');
-    const priceInput = document.getElementById('custom-topping-price');
-    const name = nameInput.value.trim();
-    const price = parseInt(priceInput.value.trim()) || 0; 
-    
+    const name = document.getElementById('custom-topping-name').value.trim();
+    const price = parseInt(document.getElementById('custom-topping-price').value.trim()) || 0; 
     if (!name) return alert('Vui lòng nhập tên Topping!');
     
     const toppingList = document.getElementById('modal-topping-list');
-    const customToppingHTML = `
+    toppingList.insertAdjacentHTML('beforeend', `
         <label class="flex items-center justify-between p-2 rounded border border-orange-200 bg-orange-50 cursor-pointer hover:bg-orange-100 transition-colors">
             <div class="flex items-center gap-2">
                 <input type="checkbox" checked data-name="${name} (Tùy chọn)" data-price="${price}" class="topping-checkbox w-4 h-4 accent-orange-500" onchange="updateModalTotal()">
@@ -167,10 +226,10 @@ function addCustomTopping() {
             </div>
             <span class="text-xs font-bold text-orange-600">${price > 0 ? '+' + price.toLocaleString() + 'đ' : 'Miễn phí'}</span>
         </label>
-    `;
-    toppingList.insertAdjacentHTML('beforeend', customToppingHTML);
+    `);
     
-    nameInput.value = ''; priceInput.value = '';
+    document.getElementById('custom-topping-name').value = ''; 
+    document.getElementById('custom-topping-price').value = '';
     document.getElementById('custom-topping-form').classList.add('hidden');
     updateModalTotal();
 }
@@ -182,7 +241,7 @@ function updateModalTotal() {
 }
 
 // ==========================================
-// THÊM MÓN VÀO GIỎ HÀNG (ĐẨY LÊN MÂY)
+// LƯU MÓN VÀO GIỎ HÀNG (SUPABASE)
 // ==========================================
 async function saveItemToCart() {
     let selectedToppings = [];
@@ -196,44 +255,24 @@ async function saveItemToCart() {
     const finalPricePerItem = modalBasePrice + toppingPrice;
 
     const existingIndex = cart.findIndex(i => 
-        i.id === activeMenuItem.id &&
-        JSON.stringify(i.toppings) === JSON.stringify(selectedToppings) &&
-        i.note === note && i.isCustom !== true
+        i.id === activeMenuItem.id && JSON.stringify(i.toppings) === JSON.stringify(selectedToppings) && i.note === note && i.isCustom !== true
     );
 
     if (existingIndex > -1) {
         const existingItem = cart[existingIndex];
         const newQty = existingItem.quantity + modalQuantity;
-        
         const { error } = await supabaseClient.from('order_items').update({ quantity: newQty }).eq('id', existingItem.db_id);
         if (!error) existingItem.quantity = newQty;
-
     } else {
         const newItem = {
-            table_num: currentTable,
-            item_id: activeMenuItem.id,
-            name: activeMenuItem.name,
-            price: finalPricePerItem,
-            quantity: modalQuantity,
-            toppings: selectedToppings,
-            note: note,
-            is_served: false,
-            is_custom: false
+            table_num: currentTable, item_id: activeMenuItem.id, name: activeMenuItem.name, price: finalPricePerItem,
+            quantity: modalQuantity, toppings: selectedToppings, note: note, is_served: false, is_custom: false
         };
-
         const { data, error } = await supabaseClient.from('order_items').insert([newItem]).select();
-        
         if (!error && data) {
             cart.push({
-                db_id: data[0].id,
-                id: data[0].item_id,
-                name: data[0].name,
-                currentPrice: data[0].price,
-                quantity: data[0].quantity,
-                toppings: data[0].toppings,
-                note: data[0].note,
-                isServed: data[0].is_served,
-                isCustom: data[0].is_custom
+                db_id: data[0].id, id: data[0].item_id, name: data[0].name, currentPrice: data[0].price,
+                quantity: data[0].quantity, toppings: data[0].toppings, note: data[0].note, isServed: data[0].is_served, isCustom: data[0].is_custom
             });
         }
     }
@@ -259,27 +298,18 @@ async function saveCustomItem() {
     const qty = parseInt(document.getElementById('custom-qty').value);
     const note = document.getElementById('custom-note').value.trim();
 
-    if (!name || isNaN(price) || isNaN(qty) || qty < 1) return alert('Vui lòng nhập Tên món, Giá tiền và Số lượng hợp lệ!');
+    if (!name || isNaN(price) || isNaN(qty) || qty < 1) return alert('Nhập Tên, Giá, Số lượng hợp lệ!');
 
     const newItem = {
-        table_num: currentTable,
-        item_id: 'custom_' + Date.now(),
-        name: name,
-        price: price,
-        quantity: qty,
-        toppings: [],
-        note: note,
-        is_served: false,
-        is_custom: true
+        table_num: currentTable, item_id: 'custom_' + Date.now(), name: name, price: price,
+        quantity: qty, toppings: [], note: note, is_served: false, is_custom: true
     };
 
     const { data, error } = await supabaseClient.from('order_items').insert([newItem]).select();
-        
     if (!error && data) {
         cart.push({
             db_id: data[0].id, id: data[0].item_id, name: data[0].name, currentPrice: data[0].price,
-            quantity: data[0].quantity, toppings: data[0].toppings, note: data[0].note,
-            isServed: data[0].is_served, isCustom: data[0].is_custom
+            quantity: data[0].quantity, toppings: data[0].toppings, note: data[0].note, isServed: data[0].is_served, isCustom: data[0].is_custom
         });
     }
 
@@ -288,12 +318,11 @@ async function saveCustomItem() {
 }
 
 // ==========================================
-// CÁC HÀM CẬP NHẬT TRỰC TIẾP LÊN MÂY
+// CÁC HÀM CẬP NHẬT GIỎ HÀNG (SUPABASE)
 // ==========================================
 async function updateQty(index, change) {
     const item = cart[index];
     const newQty = item.quantity + change;
-
     if (newQty <= 0) {
         await supabaseClient.from('order_items').delete().eq('id', item.db_id); 
         cart.splice(index, 1);
@@ -321,18 +350,14 @@ async function clearCart() {
 }
 
 // ==========================================
-// RENDER GIỎ HÀNG (Cải tiến tính Giảm giá)
+// VẼ & TÍNH TIỀN GIỎ HÀNG
 // ==========================================
 function renderCart() {
     const cartContainer = document.getElementById('cart-items');
     let subtotal = 0;
 
     if (cart.length === 0) {
-        cartContainer.innerHTML = `
-            <div class="h-full flex flex-col items-center justify-center text-gray-400 opacity-70">
-                <p class="text-sm">Chưa có món nào</p>
-            </div>
-        `;
+        cartContainer.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-gray-400 opacity-70"><p class="text-sm">Chưa có món nào</p></div>`;
         document.getElementById('cart-subtotal').innerText = '0 đ';
         document.getElementById('cart-total').innerText = '0 đ';
         document.getElementById('discount-display-row').classList.add('hidden');
@@ -343,7 +368,6 @@ function renderCart() {
     cartContainer.innerHTML = '';
     cart.forEach((item, index) => {
         subtotal += item.currentPrice * item.quantity;
-        
         const servedClass = item.isServed ? 'opacity-50 bg-green-50' : 'bg-white';
         const checkboxState = item.isServed ? 'checked' : '';
         const customBadge = item.isCustom ? '<span class="text-[10px] bg-orange-100 text-orange-600 px-1 py-0.5 rounded ml-1">Ngoài menu</span>' : '';
@@ -352,33 +376,27 @@ function renderCart() {
         if (item.toppings && item.toppings.length > 0) extraInfo += `<p class="text-xs text-gray-500 mt-0.5">+ ${item.toppings.join(', ')}</p>`;
         if (item.note) extraInfo += `<p class="text-xs text-orange-500 italic mt-0.5">Lưu ý: ${item.note}</p>`;
 
-        const itemHTML = `
+        cartContainer.insertAdjacentHTML('beforeend', `
             <div class="flex items-start gap-3 p-3 mb-2 rounded-lg border border-gray-100 shadow-sm transition-colors ${servedClass}">
                 <input type="checkbox" class="w-5 h-5 mt-1 accent-green-600 rounded cursor-pointer" ${checkboxState} onchange="toggleServed(${index})">
                 <div class="flex-1">
-                    <h4 class="text-sm font-medium text-gray-800 leading-tight ${item.isServed ? 'line-through text-gray-500' : ''}">
-                        ${item.name} ${customBadge}
-                    </h4>
+                    <h4 class="text-sm font-medium text-gray-800 leading-tight ${item.isServed ? 'line-through text-gray-500' : ''}">${item.name} ${customBadge}</h4>
                     ${extraInfo}
                     <p class="text-sm font-bold text-[#0056a3] mt-1.5">${(item.currentPrice * item.quantity).toLocaleString()} đ</p>
                 </div>
                 <div class="flex flex-col items-center gap-1 bg-gray-100 rounded-lg p-1 shrink-0">
-                    <button onclick="updateQty(${index}, 1)" class="w-7 h-7 flex justify-center items-center bg-white rounded shadow-sm text-[#0056a3] font-bold hover:bg-blue-50">+</button>
+                    <button onclick="updateQty(${index}, 1)" class="w-7 h-7 flex justify-center items-center bg-white rounded shadow-sm text-[#0056a3] font-bold">+</button>
                     <span class="w-full text-center text-sm font-medium py-1">${item.quantity}</span>
-                    <button onclick="updateQty(${index}, -1)" class="w-7 h-7 flex justify-center items-center bg-white rounded shadow-sm text-gray-600 font-bold hover:bg-gray-50">-</button>
+                    <button onclick="updateQty(${index}, -1)" class="w-7 h-7 flex justify-center items-center bg-white rounded shadow-sm text-gray-600 font-bold">-</button>
                 </div>
             </div>
-        `;
-        cartContainer.insertAdjacentHTML('beforeend', itemHTML);
+        `);
     });
 
-    // 1. Cập nhật Tạm tính
     document.getElementById('cart-subtotal').innerText = subtotal.toLocaleString() + ' đ';
 
-    // 2. Tính toán Giảm giá
     let discountAmount = 0;
     const discountRow = document.getElementById('discount-display-row');
-    
     if (discountData.value > 0) {
         discountRow.classList.remove('hidden');
         if (discountData.type === 'percent') {
@@ -393,14 +411,13 @@ function renderCart() {
         discountRow.classList.add('hidden');
     }
 
-    // 3. Cập nhật Tổng thanh toán cuối cùng
     finalBillTotal = subtotal - discountAmount;
-    if (finalBillTotal < 0) finalBillTotal = 0; // Tránh giảm giá lố tiền bill
+    if (finalBillTotal < 0) finalBillTotal = 0; 
     document.getElementById('cart-total').innerText = finalBillTotal.toLocaleString() + ' đ';
 }
 
 // ==========================================
-// LOGIC MODAL GIẢM GIÁ
+// LOGIC GIẢM GIÁ
 // ==========================================
 function openDiscountModal() {
     if (cart.length === 0) return alert("Giỏ hàng trống!");
@@ -409,24 +426,20 @@ function openDiscountModal() {
     document.getElementById('discount-modal').classList.remove('hidden');
     setTimeout(() => document.getElementById('discount-input').focus(), 100);
 }
-
-function closeDiscountModal() {
-    document.getElementById('discount-modal').classList.add('hidden');
-}
+function closeDiscountModal() { document.getElementById('discount-modal').classList.add('hidden'); }
 
 function setDiscountType(type) {
     discountData.type = type;
     const btnPct = document.getElementById('btn-discount-percent');
     const btnAmt = document.getElementById('btn-discount-amount');
     const unit = document.getElementById('discount-unit');
-
     if (type === 'percent') {
-        btnPct.className = "flex-1 py-1.5 bg-white shadow-sm rounded text-sm font-bold text-[#0056a3] transition-all";
-        btnAmt.className = "flex-1 py-1.5 rounded text-sm font-medium text-gray-500 transition-all";
+        btnPct.className = "flex-1 py-1.5 bg-white shadow-sm rounded text-sm font-bold text-[#0056a3]";
+        btnAmt.className = "flex-1 py-1.5 rounded text-sm font-medium text-gray-500";
         unit.innerText = '%';
     } else {
-        btnAmt.className = "flex-1 py-1.5 bg-white shadow-sm rounded text-sm font-bold text-[#0056a3] transition-all";
-        btnPct.className = "flex-1 py-1.5 rounded text-sm font-medium text-gray-500 transition-all";
+        btnAmt.className = "flex-1 py-1.5 bg-white shadow-sm rounded text-sm font-bold text-[#0056a3]";
+        btnPct.className = "flex-1 py-1.5 rounded text-sm font-medium text-gray-500";
         unit.innerText = 'đ';
     }
 }
@@ -435,88 +448,61 @@ function applyDiscount() {
     let val = parseInt(document.getElementById('discount-input').value) || 0;
     if (val < 0) val = 0;
     if (discountData.type === 'percent' && val > 100) val = 100;
-
     discountData.value = val;
-    closeDiscountModal();
-    renderCart();
+    closeDiscountModal(); renderCart();
 }
 
-function removeDiscount() {
-    discountData.value = 0;
-    renderCart();
-}
+function removeDiscount() { discountData.value = 0; renderCart(); }
 
 // ==========================================
-// LOGIC THANH TOÁN & TIỀN THỪA (TÍCH HỢP XÓA DB)
+// LOGIC THANH TOÁN & IN BILL
 // ==========================================
 function openPaymentModal() {
-    if (cart.length === 0) return alert("Bàn này chưa gọi món nào!");
-    
+    if (cart.length === 0) return alert("Bàn chưa gọi món!");
     document.getElementById('pay-table-name').innerText = currentTable;
     document.getElementById('pay-total-amount').innerText = finalBillTotal.toLocaleString() + ' đ';
-    
-    // Gợi ý luôn số tiền khách đưa bằng tổng bill (bấm cho nhanh)
     document.getElementById('pay-customer-cash').value = finalBillTotal;
-    calculateChange(); // Tính tiền thừa luôn
-
+    calculateChange();
     document.getElementById('payment-modal').classList.remove('hidden');
     setTimeout(() => document.getElementById('pay-customer-cash').select(), 100);
 }
 
-function closePaymentModal() {
-    document.getElementById('payment-modal').classList.add('hidden');
-}
+function closePaymentModal() { document.getElementById('payment-modal').classList.add('hidden'); }
 
 function calculateChange() {
-    const cashInput = document.getElementById('pay-customer-cash').value;
-    const cash = parseInt(cashInput) || 0;
+    const cash = parseInt(document.getElementById('pay-customer-cash').value) || 0;
     const changeAmount = cash - finalBillTotal;
     const changeEl = document.getElementById('pay-change-amount');
-
     if (changeAmount < 0) {
-        changeEl.innerText = "Chưa đủ tiền!";
-        changeEl.className = "text-lg font-bold text-red-500";
+        changeEl.innerText = "Chưa đủ tiền!"; changeEl.className = "text-lg font-bold text-red-500";
     } else {
-        changeEl.innerText = changeAmount.toLocaleString() + ' đ';
-        changeEl.className = "text-xl font-bold text-green-600";
+        changeEl.innerText = changeAmount.toLocaleString() + ' đ'; changeEl.className = "text-xl font-bold text-green-600";
     }
 }
 
-// ==========================================
-// HÀM THANH TOÁN (LƯU VÀO KÉT SẮT SUPABASE)
-// ==========================================
 async function confirmPayment() {
     const cash = parseInt(document.getElementById('pay-customer-cash').value) || 0;
     if (cash < finalBillTotal) return alert("Khách đưa chưa đủ tiền thanh toán!");
     const changeAmount = cash - finalBillTotal;
 
-    // 1. Lấy mã order_id của bàn này trước khi xóa
     const { data: tableData } = await supabaseClient.from('tables_active').select('order_id').eq('table_num', currentTable).single();
     const orderId = tableData ? tableData.order_id : 'UNKNOWN';
 
-    // 2. Tóm tắt các món khách đã ăn (Lưu dạng JSON)
-    const itemsSummary = cart.map(item => ({
-        name: item.name,
-        qty: item.quantity,
-        price: item.currentPrice
-    }));
+    const itemsSummary = cart.map(item => ({ name: item.name, qty: item.quantity, price: item.currentPrice }));
 
-    // 3. ĐẨY HÓA ĐƠN VÀO KÉT SẮT (Bảng receipts)
     const { error: receiptErr } = await supabaseClient.from('receipts').insert([{
-        order_id: orderId,
-        table_num: currentTable,
-        total_amount: finalBillTotal,
-        discount_amount: discountData.value,
-        cash_received: cash,
-        change_returned: changeAmount,
-        items_summary: itemsSummary
+        order_id: orderId, table_num: currentTable, total_amount: finalBillTotal,
+        discount_amount: discountData.value, cash_received: cash, change_returned: changeAmount, items_summary: itemsSummary
     }]);
 
     if (receiptErr) return alert("Lỗi lưu hóa đơn: " + receiptErr.message);
 
-    // 4. Xóa bàn khỏi màn hình (Món ăn tự động biến mất theo)
     await supabaseClient.from('tables_active').delete().eq('table_num', currentTable);
-
-    alert(`✅ Đã thanh toán thành công Bàn ${currentTable}!\nTổng thu: ${finalBillTotal.toLocaleString()} đ`);
+    alert(`✅ Đã thanh toán Bàn ${currentTable}!\nThu: ${finalBillTotal.toLocaleString()} đ`);
     window.location.href = 'index.html';
+}
+
+function goBack() { 
+    console.log("Đã gửi lệnh in Bếp!");
+    window.location.href = 'index.html'; 
 }
