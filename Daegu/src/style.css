@@ -1,0 +1,56 @@
+:root {
+    --card-bg: #e6f0f9;
+    --card-border: #b8d2e8;
+}
+
+.receipt-card {
+    background-color: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-bottom: none;
+    position: relative;
+    margin-bottom: 12px;
+    border-radius: 4px 4px 0 0;
+    user-select: none; /* Chống bôi đen text khi bấm giữ */
+    -webkit-user-select: none;
+}
+
+.receipt-card::after {
+    content: "";
+    position: absolute;
+    bottom: -8px;
+    left: -1px;
+    right: -1px;
+    height: 8px;
+    background-size: 12px 100%;
+    background-image: 
+        linear-gradient(135deg, var(--card-bg) 50%, transparent 50%),
+        linear-gradient(225deg, var(--card-bg) 50%, transparent 50%);
+    background-repeat: repeat-x;
+}
+
+.receipt-wrapper {
+    filter: drop-shadow(0px 1px 0px var(--card-border));
+    -webkit-touch-callout: none; /* Vô hiệu hóa menu mặc định của iOS khi bấm giữ */
+}
+
+/* Biểu đồ tròn CSS thuần (Dùng cho trang Dashboard) */
+.pie-chart {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    /* Các phần trăm: Cam (Thịt nướng 40%), Xanh (Rượu Soju 35%), Đỏ (Mì cay 25%) */
+    background: conic-gradient(
+        #f97316 0% 40%, 
+        #0ea5e9 40% 75%, 
+        #ef4444 75% 100%
+    );
+}
+
+/* Ẩn scrollbar cho giao diện mượt như App Native */
+::-webkit-scrollbar {
+    width: 4px;
+}
+::-webkit-scrollbar-thumb {
+    background: #cbd5e1; 
+    border-radius: 4px;
+}
