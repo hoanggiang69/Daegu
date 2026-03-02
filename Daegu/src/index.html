@@ -2,124 +2,100 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>POS Daegu - Quản lý</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <link rel="manifest" href="manifest.json">
-
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="POS Daegu">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3081/3081333.png">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <style>
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
 </head>
-<body class="bg-[#f5f5f5] h-screen flex flex-col font-sans text-sm pb-14 overflow-hidden">
+<body class="bg-gray-50 h-[100dvh] flex flex-col font-sans text-sm pb-14 overflow-hidden select-none">
 
-    <div id="tab-khuvuc-header" class="bg-white shadow-sm border-b border-gray-200 px-4 py-3 flex justify-between items-center z-10 shrink-0">
-        <div>
-            <h1 class="text-xl font-bold text-[#0056a3] tracking-tight">Sơ đồ bàn</h1>
-            <p class="text-xs text-green-600 font-medium flex items-center gap-1 mt-0.5"><span class="w-1.5 h-1.5 rounded-full bg-green-500 block"></span> Hệ thống đang chạy</p>
-        </div>
+    <div class="bg-white p-4 shadow-sm flex justify-between items-center z-10 shrink-0">
+        <h1 class="text-xl font-bold text-[#0056a3]" id="header-title">Sơ đồ bàn</h1>
         <div class="flex items-center gap-3">
-            <button id="btn-shift" onclick="toggleShift()" class="bg-green-600 text-white px-4 py-2 rounded font-medium shadow active:bg-green-700 active:scale-95 transition flex items-center gap-2">
-                <svg id="shift-icon" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-                <span id="shift-text">Mở ca</span>
+            <button onclick="toggleFullScreen()" class="p-2 bg-gray-100 rounded-full text-gray-600 hover:bg-gray-200 transition" title="Toàn màn hình">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
             </button>
-            <button id="header-add-btn" onclick="openAddTableModal()" class="hidden bg-[#0056a3] text-white px-4 py-2 rounded font-bold shadow-md active:bg-blue-800 active:scale-95 transition text-base flex items-center gap-1">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"></path></svg>
-                Thêm bàn
-            </button>
+            <button id="tab-khuvuc-header" onclick="openTableModal()" class="px-4 py-2 bg-[#0056a3] text-white rounded-lg font-bold shadow-sm">+ Thêm mới</button>
         </div>
     </div>
 
-    <div id="khuvuc-state" class="flex-1 overflow-y-auto">
-        <div id="empty-state" class="h-full flex flex-col items-center justify-center text-center p-6 hidden">
-            <div class="w-24 h-24 bg-blue-50 rounded-full flex items-center justify-center mb-4"><svg class="w-12 h-12 text-[#0056a3] opacity-50" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg></div>
-            <h2 class="text-xl font-bold text-gray-800 mb-2">Chưa có bàn nào hoạt động</h2>
-            <button onclick="openAddTableModal()" class="mt-4 bg-[#0056a3] text-white px-6 py-3 rounded-lg font-bold shadow-lg shadow-blue-500/30 active:scale-95 transition flex items-center gap-2">Tạo bàn đầu tiên</button>
+    <div id="khuvuc-state" class="flex-1 overflow-y-auto p-4 space-y-6">
+        
+        <div id="empty-table-state" class="hidden flex flex-col items-center justify-center h-[70vh]">
+            <div class="w-24 h-24 bg-blue-50 text-[#0056a3] rounded-full flex items-center justify-center mb-5">
+                <svg class="w-12 h-12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+            </div>
+            <h3 class="text-xl font-bold text-gray-800 mb-5">Chưa có bàn nào hoạt động</h3>
+            <button onclick="openTableModal()" class="px-6 py-3 bg-[#0056a3] text-white rounded-xl font-bold shadow-md hover:bg-blue-800 transition active:scale-95">Tạo bàn đầu tiên</button>
         </div>
-        <div id="populated-state" class="p-4 hidden"><div id="table-grid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4"></div></div>
+
+        <div id="takeaway-section" class="hidden">
+            <h3 class="text-sm font-bold text-orange-600 mb-3 flex items-center gap-2">
+                <span class="text-lg">🛵</span> Đang giao / Mang về
+            </h3>
+            <div id="takeaway-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4"></div>
+        </div>
+        
+        <div id="dinein-section" class="hidden">
+            <h3 class="text-sm font-bold text-[#0056a3] mb-3 flex items-center gap-2">
+                <span class="text-lg">🍽️</span> Bàn tại quán
+            </h3>
+            <div id="dinein-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4"></div>
+        </div>
     </div>
 
-    <div id="nhahang-state" class="hidden flex-1 overflow-y-auto bg-gray-50">
-        <div class="bg-gradient-to-r from-[#0056a3] to-[#0070d2] p-5 text-white shadow-md">
-            <h2 class="text-lg font-bold mb-3">Tổng quan doanh thu</h2>
-            <div id="custom-date-btn" class="relative flex items-center bg-white/20 rounded-lg p-2 w-max cursor-pointer hover:bg-white/30 transition">
-                <span id="display-date" class="font-medium px-2 tracking-wide">--/--/----</span>
+    <div id="nhahang-state" class="hidden flex-1 overflow-y-auto bg-gray-100 p-4">
+        <div class="flex justify-between items-center bg-white p-3 rounded-xl shadow-sm mb-4">
+            <span class="font-bold text-gray-700" id="display-date">Hôm nay</span>
+            <div class="relative">
                 <input type="text" id="report-date" class="hidden">
+                <button id="custom-date-btn" class="px-3 py-1.5 bg-gray-100 text-[#0056a3] rounded-lg text-sm font-bold">Chọn ngày</button>
             </div>
         </div>
-        <div class="grid grid-cols-2 gap-3 p-4">
-            <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center">
-                <p class="text-xs text-gray-500 font-medium mb-1">Tổng doanh thu</p>
-                <p id="dashboard-revenue" class="text-xl font-bold text-[#0056a3]">0 đ</p>
+        <div class="bg-white p-4 rounded-xl shadow-sm text-center italic text-gray-500">Khu vực biểu đồ Báo cáo đang hoàn thiện...</div>
+    </div>
+
+    <div id="thucdon-state" class="hidden flex-1 flex flex-col overflow-hidden bg-gray-50">
+        <div class="bg-white px-4 py-3 shadow-sm z-10 border-b flex gap-2 overflow-x-auto hide-scrollbar items-center" id="admin-category-list"></div>
+        <div class="flex-1 overflow-y-auto p-4">
+            <div class="flex justify-between items-end mb-4">
+                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider" id="admin-list-title">Danh sách món ăn</h3>
+                <button onclick="openItemModal()" class="px-3 py-1.5 bg-[#0056a3] text-white rounded-lg text-sm font-bold shadow-sm">+ Thêm món</button>
             </div>
-            <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center">
-                <p class="text-xs text-gray-500 font-medium mb-1">Số hóa đơn</p>
-                <p id="dashboard-orders" class="text-xl font-bold text-gray-800">0 đơn</p>
-            </div>
-        </div>
-        <div class="bg-white mx-4 mb-4 p-4 rounded-xl shadow-sm border border-gray-100">
-            <h3 class="font-bold text-gray-800 mb-2 text-center text-sm uppercase tracking-wide">Tỷ lệ món bán chạy</h3>
-            <div class="relative h-64 w-full"><canvas id="salesChart"></canvas></div>
+            <div id="admin-items-grid" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
         </div>
     </div>
 
-    <div id="thucdon-state" class="hidden flex-1 overflow-y-auto bg-gray-50 flex flex-col">
-        <div class="bg-white p-4 shadow-sm border-b shrink-0 flex justify-between items-center z-10">
-            <h2 class="text-lg font-bold text-[#0056a3]">Quản lý Thực đơn</h2>
-            <button onclick="openCategoryModal()" class="text-sm font-bold text-blue-600 border border-blue-500 px-3 py-1.5 rounded-lg hover:bg-blue-50 active:bg-blue-100">+ Thẻ mới</button>
-        </div>
-
-        <div class="p-3 bg-white border-b shrink-0 shadow-sm">
-            <div id="admin-category-list" class="flex gap-2 overflow-x-auto hide-scrollbar pb-1"></div>
-        </div>
-
-        <div class="flex-1 p-4 overflow-y-auto flex flex-col">
-            <div class="flex justify-between items-center mb-3 shrink-0">
-                <h3 id="admin-list-title" class="text-xs font-bold text-gray-500 uppercase tracking-wider">Danh sách món ăn</h3>
-                <button id="btn-add-entity" onclick="openItemModal()" class="text-sm font-bold bg-[#0056a3] text-white px-3 py-2 rounded-lg shadow-md hover:bg-blue-700 flex items-center gap-1">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"></path></svg>
-                    <span>Thêm món</span>
-                </button>
-            </div>
-            
-            <div id="admin-item-list" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
-            <div id="admin-topping-list" class="hidden flex-col gap-2"></div>
-        </div>
-    </div>
-
-    <div id="caidat-state" class="hidden flex-1 overflow-y-auto bg-gray-50 flex flex-col">
-        <div class="bg-white p-4 shadow-sm border-b shrink-0 z-10">
-            <h2 class="text-lg font-bold text-[#0056a3]">Cài đặt hệ thống</h2>
-        </div>
-        <div class="p-4 space-y-4">
-            <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
-                <div class="flex justify-between items-center mb-4">
-                    <div class="flex items-center gap-2">
-                        <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h7"></path></svg>
-                        <h3 class="font-bold text-gray-800 text-base">Cỡ chữ giao diện</h3>
-                    </div>
-                    <span id="ui-scale-display" class="bg-blue-50 text-[#0056a3] px-2 py-1 rounded text-xs font-bold">16px</span>
+    <div id="caidat-state" class="hidden flex-1 overflow-y-auto bg-gray-50 p-4 space-y-4">
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+            <div class="flex justify-between items-center mb-4">
+                <div class="flex items-center gap-2">
+                    <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h7"></path></svg>
+                    <h3 class="font-bold text-gray-800 text-base">Cỡ chữ giao diện</h3>
                 </div>
-                <div class="flex items-center gap-3">
-                    <span class="text-sm font-medium text-gray-500">A-</span>
-                    <input type="range" id="ui-scale-slider" min="12" max="24" step="1" value="16" class="w-full accent-[#0056a3]" oninput="setUIScale(this.value)">
-                    <span class="text-lg font-bold text-gray-700">A+</span>
-                </div>
-                <p class="text-xs text-gray-400 mt-3 italic">* Kéo thanh trượt để phóng to/thu nhỏ toàn bộ màn hình máy POS. Cài đặt sẽ được lưu lại cho các lần mở sau.</p>
+                <span id="ui-scale-display" class="bg-blue-50 text-[#0056a3] px-2 py-1 rounded text-xs font-bold">16px</span>
             </div>
-            
-            <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 opacity-60">
-                <h3 class="font-bold text-gray-800 mb-2">Thông tin hóa đơn (Sắp ra mắt)</h3>
-                <p class="text-xs text-gray-500">Tùy chỉnh tên nhà hàng, địa chỉ, lời chào trên bill in.</p>
+            <div class="flex items-center gap-3">
+                <span class="text-sm font-medium text-gray-500">A-</span>
+                <input type="range" id="ui-scale-slider" min="12" max="24" step="1" value="16" class="w-full accent-[#0056a3]" oninput="setUIScale(this.value)">
+                <span class="text-lg font-bold text-gray-700">A+</span>
             </div>
+            <p class="text-xs text-gray-400 mt-3 italic">* Kéo thanh trượt để phóng to/thu nhỏ toàn bộ màn hình máy POS. Cài đặt tự động được lưu.</p>
         </div>
     </div>
 
-    <div class="fixed bottom-0 left-0 right-0 h-14 bg-white border-t border-gray-200 shadow-[0_-2px_10px_rgba(0,0,0,0.03)] flex justify-around items-center z-50 px-2 pb-safe">
+    <div class="fixed bottom-0 left-0 right-0 h-14 bg-white border-t border-gray-200 shadow-lg flex justify-around items-center z-40 px-2 pb-safe">
         <button onclick="switchTab('khuvuc')" class="flex flex-col items-center justify-center w-full h-full gap-1">
             <svg id="nav-khuvuc" class="w-6 h-6 text-[#0056a3] transition-colors" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
             <span class="text-[10px] font-medium text-gray-500">Khu vực</span>
@@ -138,147 +114,131 @@
         </button>
     </div>
 
-    <div id="context-menu" class="hidden absolute z-50 bg-white rounded-lg shadow-xl border border-gray-100 w-40 overflow-hidden transform scale-95 opacity-0 transition-all origin-top-left">
-        <button onclick="handleMenuAction('move')" class="w-full text-left px-4 py-3 hover:bg-gray-50 text-gray-700 text-sm font-medium border-b border-gray-50">Chuyển Bàn</button>
-        <button onclick="handleMenuAction('split')" class="w-full text-left px-4 py-3 hover:bg-gray-50 text-gray-700 text-sm font-medium border-b border-gray-50">Tách Bàn</button>
-        <button onclick="handleMenuAction('merge')" class="w-full text-left px-4 py-3 hover:bg-gray-50 text-gray-700 text-sm font-medium border-b border-gray-50">Gộp Bàn</button>
-        <button onclick="handleMenuAction('delete')" class="w-full text-left px-4 py-3 hover:bg-red-50 text-red-600 text-sm font-bold">Xóa Bàn</button>
-    </div>
-    
-    <div id="add-table-modal" class="hidden fixed inset-0 bg-black/60 z-[60] flex items-center justify-center">
-        <div class="bg-white rounded-xl w-[320px] shadow-2xl overflow-hidden">
-            <div class="bg-gray-50 p-4 border-b border-gray-100"><h3 class="font-bold text-lg text-gray-800 text-center">Mở bàn mới</h3></div>
-            <div class="p-5">
-                <input type="text" id="table-number-input" placeholder="Nhập số bàn..." autocomplete="off" class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg font-bold text-center outline-none focus:border-[#0056a3] mb-5">
-                <div class="flex gap-2 p-1 bg-gray-100 rounded-lg mb-6">
-                    <button id="btn-normal" onclick="selectCustomerType('normal')" class="flex-1 py-1.5 bg-white shadow-sm rounded text-sm font-medium text-[#0056a3]">Khách lẻ</button>
-                    <button id="btn-vip" onclick="selectCustomerType('vip')" class="flex-1 py-1.5 rounded text-sm font-medium text-gray-500">Khách VIP</button>
-                </div>
-                <div class="flex gap-3"><button onclick="closeAddTableModal()" class="flex-1 py-3 bg-gray-100 text-gray-700 rounded-lg font-bold">Hủy</button><button onclick="createNewTable()" class="flex-1 py-3 bg-[#0056a3] text-white rounded-lg font-bold">Tạo bàn</button></div>
+    <div id="table-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl p-6 w-[400px] max-w-full shadow-2xl relative">
+            <h2 class="text-xl font-bold text-gray-800 mb-5 text-center">Tạo Đơn Mới</h2>
+            
+            <div id="step-1-choose" class="flex gap-3 mb-2">
+                <button onclick="selectOrderType('dinein')" class="flex-1 py-4 flex flex-col items-center justify-center gap-2 bg-blue-50 text-[#0056a3] border border-blue-200 rounded-xl hover:bg-blue-100 transition active:scale-95">
+                    <span class="text-3xl">🍽️</span><span class="font-bold">Ăn tại quán</span>
+                </button>
+                <button onclick="selectOrderType('takeaway')" class="flex-1 py-4 flex flex-col items-center justify-center gap-2 bg-orange-50 text-orange-600 border border-orange-200 rounded-xl hover:bg-orange-100 transition active:scale-95">
+                    <span class="text-3xl">🛵</span><span class="font-bold">Ship / Mang về</span>
+                </button>
             </div>
-        </div>
-    </div>
-    
-    <div id="action-modal" class="hidden fixed inset-0 bg-black/60 z-[60] flex items-center justify-center">
-        <div class="bg-white rounded-xl w-[320px] shadow-2xl p-5">
-            <h3 class="font-bold text-lg text-gray-800 mb-4 text-center" id="action-modal-title">Hành động</h3>
-            <input type="text" id="action-target-input" placeholder="Nhập số bàn đích..." autocomplete="off" class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg font-bold text-center outline-none focus:border-[#0056a3] mb-5">
-            <div class="flex gap-3"><button onclick="closeActionModal()" class="flex-1 py-3 bg-gray-100 text-gray-700 rounded-lg font-bold">Hủy</button><button onclick="confirmAction()" class="flex-1 py-3 bg-[#0056a3] text-white rounded-lg font-bold shadow-md">Xác nhận</button></div>
-        </div>
-    </div>
-    
-    <div id="transfer-modal" class="hidden fixed inset-0 bg-black/60 z-[70] flex items-center justify-center p-4">
-        <div class="bg-white rounded-xl w-full max-w-md shadow-2xl flex flex-col max-h-[90vh]">
-            <div class="p-4 border-b border-gray-100 bg-gray-50 rounded-t-xl"><h3 class="font-bold text-lg text-[#0056a3] text-center" id="transfer-title">TÁCH MÓN</h3></div>
-            <div class="flex-1 overflow-y-auto p-4 bg-gray-50/50"><div id="transfer-item-list" class="space-y-2"></div></div>
-            <div class="p-4 border-t border-gray-100 bg-white rounded-b-xl flex gap-3"><button onclick="closeTransferModal()" class="flex-1 py-3 bg-gray-100 text-gray-700 rounded-lg font-bold">Hủy</button><button onclick="executeTransfer()" class="flex-[2] py-3 bg-orange-500 text-white rounded-lg font-bold shadow-md">Chuyển Món</button></div>
-        </div>
-    </div>
 
-    <div id="category-modal" class="hidden fixed inset-0 bg-black/60 z-[70] flex items-center justify-center">
-        <div class="bg-white rounded-xl w-[300px] shadow-2xl p-5">
-            <h3 class="font-bold text-lg text-gray-800 mb-4 text-center" id="category-modal-title">Thêm Thẻ Mới</h3>
-            <input type="hidden" id="cat-id">
-            <input type="text" id="cat-name" placeholder="Tên thẻ (VD: Lẩu)..." autocomplete="off" class="w-full border border-gray-300 rounded-lg p-2.5 mb-5 outline-none focus:border-[#0056a3]">
-            <div class="flex gap-2">
-                <button onclick="closeCategoryModal()" class="flex-1 py-2 bg-gray-100 text-gray-600 rounded-lg font-medium">Hủy</button>
-                <button onclick="saveCategory()" class="flex-1 py-2 bg-[#0056a3] text-white rounded-lg font-medium shadow-md">Lưu</button>
-            </div>
-            <button id="btn-delete-cat" onclick="deleteCategory()" class="w-full mt-3 py-2 text-red-500 font-medium text-sm hover:bg-red-50 rounded-lg hidden">Xóa thẻ</button>
-        </div>
-    </div>
-
-    <div id="item-modal" class="hidden fixed inset-0 bg-black/60 z-[70] flex items-center justify-center p-4">
-        <div class="bg-white rounded-xl w-[360px] shadow-2xl p-5 max-h-[90vh] overflow-y-auto">
-            <h3 class="font-bold text-lg text-gray-800 mb-4 text-center" id="item-modal-title">Thêm Món Mới</h3>
-            <input type="hidden" id="item-id">
-            <div class="space-y-4 mb-5">
-                <input type="text" id="item-name" placeholder="Tên món *" autocomplete="off" class="w-full border border-gray-300 rounded-lg p-2 outline-none focus:border-[#0056a3]">
-                <div class="flex gap-3">
-                    <input type="number" id="item-price" placeholder="Giá thường *" autocomplete="off" class="w-full border border-gray-300 rounded-lg p-2 outline-none focus:border-[#0056a3]">
-                    <input type="number" id="item-vip-price" placeholder="Giá VIP" autocomplete="off" class="w-full border border-red-200 bg-red-50 rounded-lg p-2 outline-none focus:border-red-500">
-                </div>
-                <div class="flex gap-3 relative">
-                    <div class="flex-[2]">
-                        <select id="item-category" class="w-full h-full border border-gray-300 rounded-lg p-2 outline-none bg-white"></select>
+            <div id="step-2-input" class="hidden mt-4">
+                <div id="form-dinein" class="hidden mb-4">
+                    <div class="flex bg-gray-100 p-1 rounded-lg mb-4">
+                        <button id="btn-normal" onclick="selectCustomerType('normal')" class="flex-1 py-1.5 bg-white shadow-sm rounded text-sm font-medium text-[#0056a3]">Khách lẻ</button>
+                        <button id="btn-vip" onclick="selectCustomerType('vip')" class="flex-1 py-1.5 rounded text-sm font-medium text-gray-500">Khách VIP</button>
                     </div>
-                    <div class="flex-[1] relative">
-                        <button type="button" id="btn-icon-select" onclick="toggleEmojiPicker()" class="w-full h-full border border-gray-300 rounded-lg p-2 text-center text-2xl bg-white hover:bg-gray-50 focus:border-[#0056a3] outline-none transition flex items-center justify-center">🍲</button>
-                        <input type="hidden" id="item-icon" value="🍲">
-                        
-                        <div id="emoji-picker" class="hidden absolute right-0 bottom-[110%] mb-1 w-[280px] p-3 bg-white border border-gray-200 shadow-2xl rounded-xl z-50">
-                            <div class="text-xs text-gray-500 mb-2 font-bold flex justify-between items-center">
-                                <span>Chọn biểu tượng món:</span>
-                                <button type="button" onclick="toggleEmojiPicker()" class="text-red-400 hover:text-red-600">✖</button>
-                            </div>
-                            <div id="emoji-grid" class="grid grid-cols-7 gap-1.5 max-h-48 overflow-y-auto text-2xl text-center hide-scrollbar">
-                                </div>
-                        </div>
-                    </div>
+                    
+                    <label class="block text-sm font-bold text-[#0056a3] mb-2">Nhập số bàn:</label>
+                    <input type="number" pattern="[0-9]*" id="table-input" autocomplete="off" class="w-full border-2 border-blue-200 rounded-xl p-3 text-lg outline-none focus:border-[#0056a3]" placeholder="Ví dụ: 1, 2, 3...">
                 </div>
-                <label class="flex items-center gap-2 cursor-pointer p-2 bg-gray-50 rounded-lg border border-gray-100">
-                    <input type="checkbox" id="item-is-active" checked class="w-4 h-4 accent-green-600">
-                    <span class="text-sm font-medium text-gray-700">Đang mở bán</span>
-                </label>
                 
-                <div id="item-modal-toppings-container" class="hidden pt-2 border-t border-gray-100">
-                    <label class="block text-xs font-medium text-gray-500 mb-1">Các Topping đang áp dụng:</label>
-                    <div id="item-modal-toppings-list" class="flex flex-wrap gap-1.5 p-2 bg-gray-50 rounded-lg border border-gray-100 min-h-[40px]">
-                        </div>
-                    <p class="text-[10px] text-orange-500 mt-1 italic">* Để thêm/xóa Topping, vui lòng chọn tab "✨ Món thêm / Topping" ở ngoài</p>
+                <div id="form-takeaway" class="hidden mb-4">
+                    <label class="block text-sm font-bold text-orange-600 mb-2">Tên khách hàng (Không bắt buộc):</label>
+                    <input type="text" id="takeaway-input" autocomplete="off" class="w-full border-2 border-orange-200 rounded-xl p-3 text-lg outline-none focus:border-orange-500" placeholder="Ví dụ: Anh Tuấn Zalo">
+                </div>
+                
+                <div class="flex gap-3 mt-6">
+                    <button onclick="closeTableModal()" class="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition">Quay lại</button>
+                    <button onclick="confirmOpenTable()" class="flex-[2] py-3 bg-[#0056a3] text-white rounded-xl font-bold shadow-md hover:bg-blue-700 transition">Tạo & Gọi món</button>
                 </div>
             </div>
-            
-            <div class="flex gap-2 mt-2">
-                <button onclick="closeItemModal()" class="flex-1 py-2.5 bg-gray-100 text-gray-600 rounded-lg font-bold">Hủy</button>
-                <button onclick="saveItem()" class="flex-[2] py-2.5 bg-[#0056a3] text-white rounded-lg font-bold shadow-md">Lưu Món</button>
-            </div>
-            <button id="btn-delete-item" onclick="deleteItem()" class="w-full mt-3 py-2 text-red-500 font-medium text-sm hover:bg-red-50 rounded-lg hidden">Xóa món</button>
         </div>
     </div>
 
-    <div id="topping-modal" class="hidden fixed inset-0 bg-black/60 z-[80] flex items-center justify-center p-4">
-        <div class="bg-white rounded-xl w-[400px] shadow-2xl flex flex-col max-h-[95vh] overflow-hidden">
-            <div class="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center shrink-0">
-                <h3 class="font-bold text-lg text-orange-600" id="topping-modal-title">Quản lý Topping</h3>
-                <button onclick="closeToppingModal()" class="text-gray-400 hover:text-red-500">✖</button>
-            </div>
-            
-            <div class="p-4 overflow-y-auto flex-1 bg-white">
-                <input type="hidden" id="topping-id">
-                <div class="flex gap-3 mb-4">
+    <div id="item-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl p-6 w-[400px] max-w-full shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            <h2 id="item-modal-title" class="text-xl font-bold text-gray-800 mb-5 text-center">Thêm Món Mới</h2>
+            <input type="hidden" id="item-id">
+            <div class="space-y-4">
+                <input type="text" id="item-name" placeholder="Tên món *" class="w-full border border-gray-300 rounded-lg p-3 outline-none focus:border-[#0056a3]">
+                <div class="flex gap-3">
+                    <input type="number" id="item-price" placeholder="Giá thường *" class="w-full border border-gray-300 rounded-lg p-3 outline-none focus:border-[#0056a3]">
+                    <input type="number" id="item-vip-price" placeholder="Giá VIP" class="w-full border border-red-200 bg-red-50 rounded-lg p-3 outline-none focus:border-red-400">
+                </div>
+                
+                <div class="flex gap-3">
                     <div class="flex-[2]">
-                        <label class="block text-xs font-medium text-gray-500 mb-1">Tên món kèm/Topping *</label>
-                        <input type="text" id="topping-name" autocomplete="off" placeholder="VD: Thêm Trân Châu..." class="w-full border border-gray-300 rounded-lg p-2 outline-none focus:border-orange-500">
+                        <select id="item-category" class="w-full h-full border border-gray-300 rounded-lg p-3 outline-none bg-white"></select>
                     </div>
                     <div class="flex-[1]">
-                        <label class="block text-xs font-medium text-gray-500 mb-1">Giá tiền *</label>
-                        <input type="number" id="topping-price" autocomplete="off" placeholder="0" class="w-full border border-gray-300 rounded-lg p-2 outline-none focus:border-orange-500">
+                        <button type="button" id="btn-icon-select" onclick="toggleEmojiPicker()" class="w-full h-full border border-gray-300 rounded-lg p-2 text-center text-3xl bg-white hover:bg-gray-50 outline-none transition flex items-center justify-center">🍲</button>
+                        <input type="hidden" id="item-icon" value="🍲">
                     </div>
                 </div>
 
-                <hr class="my-4 border-gray-100">
-                
-                <h4 class="font-bold text-gray-800 text-sm mb-2">Áp dụng Topping này cho các món:</h4>
-                
-                <div class="flex gap-2 mb-3">
-                    <input type="text" id="topping-search-item" oninput="renderToppingItemCheckboxes()" autocomplete="off" placeholder="Tìm tên món ăn..." class="flex-1 bg-gray-100 border-none rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-orange-500">
-                    <select id="topping-filter-cat" onchange="renderToppingItemCheckboxes()" class="bg-gray-100 border-none rounded-lg px-2 py-1.5 text-sm outline-none focus:ring-1 focus:ring-orange-500 max-w-[100px]"></select>
-                </div>
-
-                <div id="topping-item-checkboxes" class="border border-gray-200 rounded-lg h-[250px] overflow-y-auto bg-gray-50 p-2 space-y-1"></div>
+                <label class="flex items-center gap-2 p-3 border border-gray-300 rounded-lg cursor-pointer">
+                    <input type="checkbox" id="item-is-active" class="w-5 h-5 accent-[#0056a3]" checked>
+                    <span class="font-medium">Đang mở bán</span>
+                </label>
             </div>
+            <div class="flex gap-3 mt-6">
+                <button onclick="closeItemModal()" class="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition">Hủy</button>
+                <button onclick="saveItem()" class="flex-[2] py-3 bg-[#0056a3] text-white rounded-xl font-bold shadow-md hover:bg-blue-700 transition">Lưu Món</button>
+            </div>
+        </div>
+    </div>
+    <div id="context-menu" class="hidden fixed bg-white rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.2)] border border-gray-100 w-52 z-[100] transform scale-95 opacity-0 transition-all duration-150 origin-top-left overflow-hidden">
+        <button onclick="handleMenuAction('move')" class="w-full text-left px-4 py-3 text-sm font-bold text-gray-700 hover:bg-blue-50 hover:text-[#0056a3] border-b flex items-center gap-3"><span class="text-xl">↔️</span> Chuyển bàn</button>
+        <button onclick="handleMenuAction('split')" class="w-full text-left px-4 py-3 text-sm font-bold text-gray-700 hover:bg-blue-50 hover:text-[#0056a3] border-b flex items-center gap-3"><span class="text-xl">✂️</span> Tách bàn</button>
+        <button onclick="handleMenuAction('merge')" class="w-full text-left px-4 py-3 text-sm font-bold text-gray-700 hover:bg-blue-50 hover:text-[#0056a3] border-b flex items-center gap-3"><span class="text-xl">🔗</span> Gộp bàn</button>
+        <button onclick="handleMenuAction('delete')" class="w-full text-left px-4 py-3 text-sm font-bold text-red-600 hover:bg-red-50 flex items-center gap-3"><span class="text-xl">🗑️</span> Hủy đơn / Xóa</button>
+    </div>
 
-            <div class="p-4 border-t border-gray-100 bg-white shrink-0">
-                <button onclick="saveTopping()" class="w-full py-3 bg-orange-500 text-white rounded-lg font-bold shadow-md hover:bg-orange-600 active:scale-95 transition">LƯU TOPPING</button>
-                <button id="btn-delete-topping" onclick="deleteTopping()" class="w-full mt-2 py-2 text-red-500 font-medium text-sm hover:bg-red-50 rounded-lg hidden">Xóa vĩnh viễn Topping này</button>
+    <div id="action-modal" class="hidden fixed inset-0 bg-black/50 z-[110] flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl p-6 w-[350px] max-w-full shadow-2xl relative">
+            <h2 id="action-modal-title" class="text-xl font-bold text-[#0056a3] mb-4 text-center">Thao tác bàn</h2>
+            <div class="mb-5">
+                <label class="block text-sm font-bold text-gray-700 mb-2">Nhập số bàn đích:</label>
+                <input type="text" id="action-target-input" class="w-full border-2 border-blue-200 rounded-xl p-3 text-lg outline-none focus:border-[#0056a3]" placeholder="VD: 5, VIP 2...">
+            </div>
+            <div class="flex gap-3">
+                <button onclick="closeActionModal()" class="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition">Hủy</button>
+                <button onclick="confirmAction()" class="flex-1 py-3 bg-[#0056a3] text-white rounded-xl font-bold shadow-md hover:bg-blue-700 transition">Xác nhận</button>
             </div>
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/vn.js"></script>
+    <div id="transfer-modal" class="hidden fixed inset-0 bg-black/50 z-[120] flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl w-[500px] max-w-full max-h-[90vh] shadow-2xl relative flex flex-col">
+            <div class="p-4 border-b shrink-0">
+                <h2 id="transfer-title" class="text-lg font-bold text-[#0056a3] text-center uppercase">Tách / Gộp Món</h2>
+                <p class="text-xs text-gray-500 text-center mt-1">Chọn các món bạn muốn chuyển đi</p>
+            </div>
+            <div class="flex-1 overflow-y-auto p-4 bg-gray-50 space-y-2" id="transfer-item-list">
+                </div>
+            <div class="p-4 border-t bg-white shrink-0 flex gap-3">
+                <button onclick="closeTransferModal()" class="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition">Hủy bỏ</button>
+                <button onclick="executeTransfer()" class="flex-[2] py-3 bg-[#0056a3] text-white rounded-xl font-bold shadow-md hover:bg-blue-700 transition">Xác nhận chuyển</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="hidden">
+        <span id="dashboard-revenue">0</span>
+        <span id="dashboard-orders">0</span>
+        <canvas id="salesChart"></canvas>
+    </div>
+
+    <div id="emoji-picker" class="hidden fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[340px] max-w-[90vw] p-4 bg-white rounded-2xl shadow-[0_10px_50px_rgba(0,0,0,0.5)] border border-gray-100 z-[9999]">
+        <div class="text-sm text-gray-700 mb-3 font-bold flex justify-between items-center border-b pb-2">
+            <span>Chọn biểu tượng món:</span>
+            <button type="button" onclick="toggleEmojiPicker()" class="text-gray-400 hover:text-red-500 text-lg px-2 transition">✖</button>
+        </div>
+        <div id="emoji-grid" class="grid grid-cols-6 gap-2 max-h-[50vh] overflow-y-auto text-3xl text-center hide-scrollbar">
+            </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://npmcdn.com/flatpickr/dist/l10n/vn.js"></script>
+    
     <script src="main.js"></script>
 </body>
 </html>

@@ -7,7 +7,6 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
 // ==========================================
 // CÁC BIẾN TOÀN CỤC VÀ HÀM TIỆN ÍCH
 // ==========================================
-let currentCustomerType = 'normal';
 let isShiftOpen = false;
 let isDatePickerInitialized = false;
 let salesChartInstance = null;
@@ -42,7 +41,6 @@ function removeVietnameseTones(str) {
 // ĐIỀU HƯỚNG TAB
 // ==========================================
 function switchTab(tabName) {
-    // ĐÃ FIX: Đảm bảo có đủ 4 tab ở đây để nó giấu đi cho sạch
     const tabs = ['khuvuc', 'nhahang', 'thucdon', 'caidat']; 
     
     tabs.forEach(tab => {
@@ -76,82 +74,249 @@ function switchTab(tabName) {
 }
 
 // ==========================================
-// TAB 1: KHU VỰC VÀ TÁCH GỘP
+// TAB 1: KHU VỰC, TẠO ĐƠN VÀ TÁCH GỘP BÀN
 // ==========================================
 async function loadTablesFromCloud() {
-    const grid = document.getElementById('table-grid');
-    const emptyState = document.getElementById('empty-state');
-    const populatedState = document.getElementById('populated-state');
-    const headerAddBtn = document.getElementById('header-add-btn');
+    const { data: tables, error } = await supabaseClient.from('tables_active').select('*').order('created_at', { ascending: true });
+    if (error || !tables) return;
 
-    const cachedHTML = localStorage.getItem('pos_table_cache');
-    if (cachedHTML) {
-        grid.innerHTML = cachedHTML; emptyState.classList.add('hidden'); populatedState.classList.remove('hidden'); headerAddBtn.classList.remove('hidden');
+    let tableTotals = {};
+    if (tables.length > 0) {
+        const activeTableNums = tables.map(t => t.table_num);
+        const { data: allItems } = await supabaseClient.from('order_items').select('table_num, price, quantity').in('table_num', activeTableNums);
+        if (allItems) {
+            allItems.forEach(item => {
+                if (!tableTotals[item.table_num]) tableTotals[item.table_num] = 0;
+                tableTotals[item.table_num] += (item.price * item.quantity);
+            });
+        }
     }
-    const { data: tables, error: tableErr } = await supabaseClient.from('tables_active').select('*').order('created_at', { ascending: true });
-    if (tableErr) return;
-    const { data: items } = await supabaseClient.from('order_items').select('table_num, price, quantity');
-    const tableTotals = {};
-    if (items) items.forEach(item => { if (!tableTotals[item.table_num]) tableTotals[item.table_num] = 0; tableTotals[item.table_num] += item.price * item.quantity; });
 
-    let newHTML = '';
+    // --- CÁC BIẾN GIAO DIỆN ---
+    const emptyState = document.getElementById('empty-table-state');
+    const takeawaySection = document.getElementById('takeaway-section');
+    const dineinSection = document.getElementById('dinein-section');
+    const takeawayGrid = document.getElementById('takeaway-grid');
+    const dineinGrid = document.getElementById('dinein-grid');
+    
+    takeawayGrid.innerHTML = '';
+    dineinGrid.innerHTML = '';
+
+    // --- LOGIC HIỂN THỊ TRẠNG THÁI TRỐNG ---
+    if (tables.length === 0) {
+        // Nếu không có bàn nào: Hiện nút to, ẩn hết các khu vực lưới
+        if (emptyState) emptyState.classList.remove('hidden');
+        if (takeawaySection) takeawaySection.classList.add('hidden');
+        if (dineinSection) dineinSection.classList.add('hidden');
+        return; // Dừng hàm luôn
+    }
+
+    // Nếu CÓ bàn: Ẩn nút to, bật khu vực lưới tại quán lên
+    if (emptyState) emptyState.classList.add('hidden');
+    if (dineinSection) dineinSection.classList.remove('hidden');
+
+    let hasTakeaway = false;
+
+    // --- VÒNG LẶP VẼ THẺ BÀN (Giữ nguyên như cũ) ---
     tables.forEach(table => {
-        const vipTag = table.is_vip ? '<span class="text-red-500 text-xs font-bold ml-1">(VIP)</span>' : '';
+        const isTakeaway = table.table_num.startsWith('Ship -');
+        const shortName = isTakeaway ? table.table_num.replace('Ship - ', '') : table.table_num;
+        
         const totalAmount = tableTotals[table.table_num] || 0;
-        newHTML += `<div class="receipt-wrapper cursor-pointer active:scale-95 transition-transform" data-table-num="${table.table_num}" onclick="window.location.href='menu.html?table=${table.table_num}&vip=${table.is_vip}'"><div class="receipt-card p-3"><div class="flex justify-between items-center mb-2"><span class="text-gray-700 font-mono text-xs">${table.order_id}</span><span class="text-[#0056a3] font-bold text-base">${totalAmount.toLocaleString()} đ</span></div><hr class="border-[--card-border] mb-2"><div class="text-center"><div class="table-name-display text-gray-800 text-base mb-1 font-medium">Bàn ${table.table_num} ${vipTag}</div><div class="text-xs text-green-600 font-medium tracking-wide">Đang phục vụ</div></div></div></div>`;
+        const createdDate = new Date(table.created_at);
+        const formattedTime = `${String(createdDate.getHours()).padStart(2, '0')}:${String(createdDate.getMinutes()).padStart(2, '0')}`;
+        const vipBadge = table.is_vip ? `<span class="bg-gradient-to-r from-orange-400 to-red-500 text-white text-[10px] px-1.5 py-0.5 rounded font-bold ml-2 shadow-sm">VIP</span>` : '';
+
+        if (isTakeaway) {
+            takeawayGrid.insertAdjacentHTML('beforeend', `
+                <div data-table-num="${table.table_num}" onclick="window.location.href='menu.html?table=${encodeURIComponent(table.table_num)}'" 
+                     class="receipt-wrapper bg-orange-50 border-2 border-orange-300 rounded-xl p-3 flex flex-col cursor-pointer shadow-sm hover:shadow-md transition active:scale-95 relative overflow-hidden">
+                    <div class="flex justify-between items-start mb-2 w-full border-b border-orange-200 pb-2">
+                        <div class="w-full overflow-hidden">
+                            <span class="font-bold text-orange-700 text-base truncate block">${shortName}</span>
+                            <p class="text-[10px] text-orange-500 font-mono mt-0.5">Mã: ${table.order_id}</p>
+                        </div>
+                        <div class="flex flex-col items-end pl-1 shrink-0"><span class="text-xl">🛵</span></div>
+                    </div>
+                    <div class="w-full space-y-1 mt-1">
+                        <div class="flex justify-between text-[11px]">
+                            <span class="text-orange-600/70 font-medium">Giờ đặt:</span>
+                            <span class="font-bold text-orange-800">${formattedTime}</span>
+                        </div>
+                        <div class="flex justify-between text-[11px]">
+                            <span class="text-orange-600/70 font-medium">Đợi ship/mang về:</span>
+                            <span class="font-bold text-red-500 time-counter" data-time="${table.created_at}">00:00</span>
+                        </div>
+                    </div>
+                    <div class="w-full mt-3 pt-2 border-t border-orange-200 flex justify-between items-center">
+                        <span class="text-xs font-bold text-orange-600">Tổng:</span>
+                        <span class="font-bold text-orange-700 text-sm">${totalAmount.toLocaleString()}đ</span>
+                    </div>
+                </div>
+            `);
+            hasTakeaway = true; 
+        } else {
+            dineinGrid.insertAdjacentHTML('beforeend', `
+                <div data-table-num="${table.table_num}" onclick="window.location.href='menu.html?table=${encodeURIComponent(table.table_num)}'" 
+                     class="receipt-wrapper bg-white border-2 border-[#0056a3] rounded-xl p-3 flex flex-col cursor-pointer shadow-sm hover:shadow-md transition active:scale-95 relative overflow-hidden">
+                    <div class="flex justify-between items-start mb-2 w-full border-b border-gray-100 pb-2">
+                        <div class="w-full overflow-hidden flex items-center">
+                            <span class="font-bold text-[#0056a3] text-base truncate block">Bàn ${shortName}</span>
+                            ${vipBadge}
+                        </div>
+                        <div class="flex flex-col items-end pl-1 shrink-0"><span class="text-xl">🍽️</span></div>
+                    </div>
+                    <p class="text-[10px] text-gray-400 font-mono mb-2">Mã: ${table.order_id}</p>
+                    <div class="w-full space-y-1">
+                        <div class="flex justify-between text-[11px]">
+                            <span class="text-gray-500 font-medium">Giờ vào:</span>
+                            <span class="font-bold text-gray-700">${formattedTime}</span>
+                        </div>
+                        <div class="flex justify-between text-[11px]">
+                            <span class="text-gray-500 font-medium">Thời gian ngồi:</span>
+                            <span class="font-bold text-[#0056a3] time-counter" data-time="${table.created_at}">00:00</span>
+                        </div>
+                    </div>
+                    <div class="w-full mt-3 pt-2 border-t border-gray-100 flex justify-between items-center">
+                        <span class="text-xs font-bold text-gray-500">Tổng:</span>
+                        <span class="font-bold text-[#0056a3] text-sm">${totalAmount.toLocaleString()}đ</span>
+                    </div>
+                </div>
+            `);
+        }
     });
 
-    grid.innerHTML = newHTML;
-    if (tables.length > 0) {
-        emptyState.classList.add('hidden'); populatedState.classList.remove('hidden'); headerAddBtn.classList.remove('hidden');
-        localStorage.setItem('pos_table_cache', newHTML);
+    if (hasTakeaway) takeawaySection.classList.remove('hidden');
+    else takeawaySection.classList.add('hidden');
+
+    updateAllTimers();
+}
+
+// LOGIC MỞ ĐƠN TẠI BÀN / MANG VỀ
+let currentOrderType = 'dinein';
+let currentCustomerType = 'normal'; // Khôi phục biến VIP
+
+function openTableModal() {
+    document.getElementById('table-modal').classList.remove('hidden');
+    document.getElementById('step-1-choose').classList.remove('hidden');
+    document.getElementById('step-2-input').classList.add('hidden');
+    document.getElementById('table-input').value = '';
+    document.getElementById('takeaway-input').value = '';
+    selectCustomerType('normal'); // Mặc định reset về khách lẻ
+}
+
+function selectOrderType(type) {
+    currentOrderType = type;
+    document.getElementById('step-1-choose').classList.add('hidden');
+    document.getElementById('step-2-input').classList.remove('hidden');
+    
+    if (type === 'dinein') {
+        document.getElementById('form-dinein').classList.remove('hidden');
+        document.getElementById('form-takeaway').classList.add('hidden');
+        document.getElementById('table-input').focus();
     } else {
-        emptyState.classList.remove('hidden'); populatedState.classList.add('hidden'); headerAddBtn.classList.add('hidden');
-        localStorage.removeItem('pos_table_cache');
+        document.getElementById('form-takeaway').classList.remove('hidden');
+        document.getElementById('form-dinein').classList.add('hidden');
+        document.getElementById('takeaway-input').focus();
     }
 }
-function toggleShift() {
-    const btn = document.getElementById('btn-shift'), text = document.getElementById('shift-text'), icon = document.getElementById('shift-icon');
-    if (!isShiftOpen) {
-        if(confirm('MỞ CA bán hàng mới?')) { isShiftOpen = true; btn.className = "bg-red-500 text-white px-4 py-2 rounded font-medium shadow active:bg-red-600 transition flex items-center gap-2"; text.innerText = "Đóng ca"; icon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"></path><path stroke-linecap="round" stroke-linejoin="round" d="M10 11V7a2 2 0 114 0v4"></path>`; }
-    } else {
-        if(confirm('CHỐT SỔ và ĐÓNG CA?')) { isShiftOpen = false; btn.className = "bg-green-600 text-white px-4 py-2 rounded font-medium shadow active:bg-green-700 transition flex items-center gap-2"; text.innerText = "Mở ca"; icon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>`; }
-    }
-}
-function openAddTableModal() { document.getElementById('add-table-modal').classList.remove('hidden'); document.getElementById('table-number-input').value = ''; setTimeout(() => document.getElementById('table-number-input').focus(), 100); }
-function closeAddTableModal() { document.getElementById('add-table-modal').classList.add('hidden'); }
+
+// Khôi phục hàm chuyển đổi VIP / Normal
 function selectCustomerType(type) {
     currentCustomerType = type;
-    document.getElementById('btn-normal').className = type === 'normal' ? "flex-1 py-1.5 bg-white shadow-sm rounded text-sm font-medium text-[#0056a3]" : "flex-1 py-1.5 rounded text-sm font-medium text-gray-500";
-    document.getElementById('btn-vip').className = type === 'vip' ? "flex-1 py-1.5 bg-gradient-to-r from-orange-400 to-red-500 text-white shadow-sm rounded text-sm font-medium" : "flex-1 py-1.5 rounded text-sm font-medium text-gray-500";
+    const btnNormal = document.getElementById('btn-normal');
+    const btnVip = document.getElementById('btn-vip');
+    if(btnNormal && btnVip) {
+        btnNormal.className = type === 'normal' ? "flex-1 py-1.5 bg-white shadow-sm rounded text-sm font-medium text-[#0056a3]" : "flex-1 py-1.5 rounded text-sm font-medium text-gray-500";
+        btnVip.className = type === 'vip' ? "flex-1 py-1.5 bg-gradient-to-r from-orange-400 to-red-500 text-white shadow-sm rounded text-sm font-medium" : "flex-1 py-1.5 rounded text-sm font-medium text-gray-500";
+    }
 }
+
+function closeTableModal() {
+    document.getElementById('table-modal').classList.add('hidden');
+}
+
+// HÀM CHỐT TẠO ĐƠN (Đã sửa lỗi không lưu bàn)
+async function confirmOpenTable() {
+    let finalTableName = "";
+    let isVip = false;
+    
+    if (currentOrderType === 'dinein') {
+        const tNum = document.getElementById('table-input').value.trim();
+        if(!tNum) return alert("Vui lòng nhập số bàn!");
+        
+        // Kiểm tra bàn trùng lặp trên giao diện
+        if (document.querySelector(`.receipt-wrapper[data-table-num="${tNum}"]`)) {
+            return alert(`Bàn ${tNum} đang có khách!`);
+        }
+        finalTableName = tNum;
+        isVip = currentCustomerType === 'vip';
+    } else {
+        let cName = document.getElementById('takeaway-input').value.trim();
+        if (!cName) {
+            const now = new Date();
+            const timeString = `${now.getHours()}:${now.getMinutes().toString().padStart(2, '0')}`;
+            cName = `Khách (${timeString})`;
+        }
+        finalTableName = "Ship - " + cName; 
+        isVip = false; // Đơn ship mặc định không có VIP
+    }
+
+    // --- BƯỚC QUAN TRỌNG NHẤT: LƯU LÊN SUPABASE TRƯỚC ---
+    const { error } = await supabaseClient.from('tables_active').insert([{ 
+        table_num: finalTableName, 
+        order_id: generateOrderId(), 
+        is_vip: isVip 
+    }]);
+
+    if (error) {
+        return alert("Lỗi khi tạo bàn trên máy chủ: " + error.message);
+    }
+
+    // --- LƯU THÀNH CÔNG RỒI MỚI CHUYỂN SANG TRANG GỌI MÓN ---
+    window.location.href = `menu.html?table=${encodeURIComponent(finalTableName)}`;
+}
+
+// LOGIC TÁCH / GỘP BÀN
 function generateOrderId() { return '#' + Math.random().toString(36).substring(2, 7).toUpperCase(); }
-async function createNewTable() {
-    const tableNum = document.getElementById('table-number-input').value.trim();
-    if (!tableNum) return alert("Vui lòng nhập số bàn!");
-    if (document.querySelector(`.receipt-wrapper[data-table-num="${tableNum}"]`)) return alert(`Bàn ${tableNum} đã có khách!`);
-    const { error } = await supabaseClient.from('tables_active').insert([{ table_num: tableNum, order_id: generateOrderId(), is_vip: currentCustomerType === 'vip' }]);
-    if (error) return alert("Lỗi khi tạo bàn trên máy chủ!");
-    loadTablesFromCloud(); closeAddTableModal();
+const contextMenu = document.getElementById('context-menu');
+const khuvucState = document.getElementById('khuvuc-state'); // Đã sửa ID bám dính
+
+function showContextMenu(x, y, tableNum) { 
+    activeContextMenuTable = tableNum; 
+    contextMenu.classList.remove('hidden'); 
+    contextMenu.style.left = `${Math.min(x, window.innerWidth - 150)}px`; 
+    contextMenu.style.top = `${Math.min(y, window.innerHeight - 200)}px`; 
+    setTimeout(() => { contextMenu.classList.remove('scale-95', 'opacity-0'); contextMenu.classList.add('scale-100', 'opacity-100'); }, 10); 
 }
-const grid = document.getElementById('table-grid'); const contextMenu = document.getElementById('context-menu');
-function showContextMenu(x, y, tableNum) { activeContextMenuTable = tableNum; contextMenu.classList.remove('hidden'); contextMenu.style.left = `${Math.min(x, window.innerWidth - 150)}px`; contextMenu.style.top = `${Math.min(y, window.innerHeight - 200)}px`; setTimeout(() => { contextMenu.classList.remove('scale-95', 'opacity-0'); contextMenu.classList.add('scale-100', 'opacity-100'); }, 10); }
-document.addEventListener('click', (e) => { if (!e.target.closest('#context-menu')) { contextMenu.classList.add('scale-95', 'opacity-0'); setTimeout(() => contextMenu.classList.add('hidden'), 100); } });
-grid.addEventListener('contextmenu', (e) => { const card = e.target.closest('.receipt-wrapper'); if (card) { e.preventDefault(); showContextMenu(e.pageX, e.pageY, card.dataset.tableNum); } });
-grid.addEventListener('touchstart', (e) => { const card = e.target.closest('.receipt-wrapper'); if (card) { pressTimer = setTimeout(() => { showContextMenu(e.touches[0].pageX, e.touches[0].pageY, card.dataset.tableNum); }, 500); } });
-grid.addEventListener('touchend', () => clearTimeout(pressTimer)); grid.addEventListener('touchmove', () => clearTimeout(pressTimer));
+
+document.addEventListener('click', (e) => { 
+    if (!e.target.closest('#context-menu') && contextMenu) { 
+        contextMenu.classList.add('scale-95', 'opacity-0'); 
+        setTimeout(() => contextMenu.classList.add('hidden'), 100); 
+    } 
+});
+
+if(khuvucState) {
+    khuvucState.addEventListener('contextmenu', (e) => { const card = e.target.closest('.receipt-wrapper'); if (card) { e.preventDefault(); showContextMenu(e.pageX, e.pageY, card.dataset.tableNum); } });
+    khuvucState.addEventListener('touchstart', (e) => { const card = e.target.closest('.receipt-wrapper'); if (card) { pressTimer = setTimeout(() => { showContextMenu(e.touches[0].pageX, e.touches[0].pageY, card.dataset.tableNum); }, 500); } });
+    khuvucState.addEventListener('touchend', () => clearTimeout(pressTimer)); 
+    khuvucState.addEventListener('touchmove', () => clearTimeout(pressTimer));
+}
+
 async function handleMenuAction(action) {
     contextMenu.classList.add('hidden'); currentActionType = action;
-    if (action === 'delete') { if (confirm(`Xóa Bàn ${activeContextMenuTable}?`)) { await supabaseClient.from('tables_active').delete().eq('table_num', activeContextMenuTable); loadTablesFromCloud(); } return; }
+    if (action === 'delete') { if (confirm(`Hủy Đơn/Bàn ${activeContextMenuTable} này?`)) { await supabaseClient.from('tables_active').delete().eq('table_num', activeContextMenuTable); await supabaseClient.from('order_items').delete().eq('table_num', activeContextMenuTable); loadTablesFromCloud(); } return; }
     const actionNames = { move: 'Chuyển Bàn', split: 'Tách Bàn', merge: 'Gộp Bàn' };
     document.getElementById('action-modal-title').innerText = `${actionNames[action]} ${activeContextMenuTable}`; document.getElementById('action-target-input').value = ''; document.getElementById('action-modal').classList.remove('hidden'); setTimeout(() => document.getElementById('action-target-input').focus(), 100);
 }
 function closeActionModal() { document.getElementById('action-modal').classList.add('hidden'); }
+
 async function confirmAction() {
     const targetNum = document.getElementById('action-target-input').value.trim();
-    if (!targetNum || targetNum === activeContextMenuTable) return alert('Lỗi số bàn!');
+    if (!targetNum || targetNum === activeContextMenuTable) return alert('Lỗi số bàn đích!');
     if (currentActionType === 'move') {
-        if (document.querySelector(`.receipt-wrapper[data-table-num="${targetNum}"]`)) return alert(`Bàn ${targetNum} đã có khách!`);
+        if (document.querySelector(`.receipt-wrapper[data-table-num="${targetNum}"]`)) return alert(`Bàn đích ${targetNum} đã có khách!`);
         const { data: sourceData } = await supabaseClient.from('tables_active').select('*').eq('table_num', activeContextMenuTable).single();
         await supabaseClient.from('tables_active').insert([{ table_num: targetNum, order_id: sourceData.order_id, is_vip: sourceData.is_vip }]);
         await supabaseClient.from('order_items').update({ table_num: targetNum }).eq('table_num', activeContextMenuTable);
@@ -159,9 +324,10 @@ async function confirmAction() {
         closeActionModal(); loadTablesFromCloud(); 
     } else { closeActionModal(); openTransferModal(activeContextMenuTable, targetNum, currentActionType); }
 }
+
 async function openTransferModal(source, target, action) {
     transferSource = source; transferTarget = target;
-    document.getElementById('transfer-title').innerText = `${action === 'split' ? 'TÁCH MÓN' : 'GỘP MÓN'}: Bàn ${source} ➔ Bàn ${target}`;
+    document.getElementById('transfer-title').innerText = `${action === 'split' ? 'TÁCH MÓN' : 'GỘP MÓN'}: ${source} ➔ ${target}`;
     const { data } = await supabaseClient.from('order_items').select('*').eq('table_num', source).order('created_at', { ascending: true });
     if (!data || data.length === 0) return alert("Bàn trống!");
     transferItems = data.map(item => ({ ...item, transferQty: 1, selected: false }));
@@ -171,16 +337,20 @@ async function openTransferModal(source, target, action) {
     });
     document.getElementById('transfer-modal').classList.remove('hidden');
 }
+
 function toggleTransferItem(index) {
     const isChecked = document.getElementById(`chk-${index}`).checked; transferItems[index].selected = isChecked;
     const ctrl = document.getElementById(`qty-ctrl-${index}`), row = document.getElementById(`transfer-row-${index}`);
     if (isChecked) { ctrl.classList.remove('opacity-40', 'pointer-events-none'); row.classList.add('border-[#0056a3]', 'bg-blue-50/30'); } else { ctrl.classList.add('opacity-40', 'pointer-events-none'); row.classList.remove('border-[#0056a3]', 'bg-blue-50/30'); }
 }
+
 function changeTransferQty(index, change) {
     const item = transferItems[index], newQty = item.transferQty + change;
     if (newQty >= 1 && newQty <= item.quantity) { item.transferQty = newQty; document.getElementById(`transfer-qty-${index}`).innerText = newQty; }
 }
+
 function closeTransferModal() { document.getElementById('transfer-modal').classList.add('hidden'); }
+
 async function executeTransfer() {
     const selected = transferItems.filter(i => i.selected); if (selected.length === 0) return alert('Tick chọn món!');
     const { data: tExist } = await supabaseClient.from('tables_active').select('table_num').eq('table_num', transferTarget).single();
@@ -193,10 +363,6 @@ async function executeTransfer() {
     if (!rem || rem.length === 0) await supabaseClient.from('tables_active').delete().eq('table_num', transferSource);
     closeTransferModal(); loadTablesFromCloud(); 
 }
-window.onload = () => { 
-    loadUIScale(); // Load lại cỡ chữ đã lưu
-    switchTab('khuvuc'); 
-};
 
 // ==========================================
 // TAB 2: LOGIC NHÀ HÀNG (BÁO CÁO & BIỂU ĐỒ)
@@ -213,8 +379,10 @@ async function loadDashboard() {
     const itemCounts = {};
     receipts.forEach(r => { if (r.items_summary) r.items_summary.forEach(i => { if (!itemCounts[i.name]) itemCounts[i.name] = 0; itemCounts[i.name] += i.qty; }); });
     const labels = Object.keys(itemCounts), chartData = Object.values(itemCounts), ctx = document.getElementById('salesChart');
-    if (salesChartInstance) salesChartInstance.destroy();
-    if (labels.length > 0) { salesChartInstance = new Chart(ctx, { type: 'doughnut', data: { labels: labels, datasets: [{ data: chartData, backgroundColor: ['#0056a3', '#f97316', '#10b981', '#ef4444', '#8b5cf6', '#f59e0b'], borderWidth: 2 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } } } } }); }
+    if(ctx) {
+        if (salesChartInstance) salesChartInstance.destroy();
+        if (labels.length > 0) { salesChartInstance = new Chart(ctx, { type: 'doughnut', data: { labels: labels, datasets: [{ data: chartData, backgroundColor: ['#0056a3', '#f97316', '#10b981', '#ef4444', '#8b5cf6', '#f59e0b'], borderWidth: 2 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } } } } }); }
+    }
 }
 
 // ==========================================
@@ -223,8 +391,6 @@ async function loadDashboard() {
 async function loadAdminMenu() {
     const { data: cats } = await supabaseClient.from('menu_categories').select('*').order('sort_order', { ascending: true });
     const { data: items } = await supabaseClient.from('menu_items').select('*').order('created_at', { ascending: false });
-    
-    // FIX LỖI 400: Đổi order từ 'created_at' sang 'name' vì bảng toppings không có cột created_at
     const { data: tops } = await supabaseClient.from('toppings').select('*').order('name', { ascending: true });
     
     adminCategories = cats || [];
@@ -239,15 +405,12 @@ function renderAdminFilterBar() {
     const container = document.getElementById('admin-category-list');
     container.innerHTML = '';
 
-    // Nút Tất cả (Đã thêm select-none và khóa touch-callout của iOS)
     const allCls = adminActiveCategory === 'all' ? 'px-4 py-1.5 rounded-full text-sm font-bold bg-[#0056a3] text-white shadow-sm shrink-0 select-none' : 'px-4 py-1.5 rounded-full text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200 shrink-0 select-none';
     container.insertAdjacentHTML('beforeend', `<button onclick="setAdminCategory('all')" class="${allCls}" style="-webkit-touch-callout: none;">Tất cả món</button>`);
 
-    // Các thẻ danh mục bình thường
     adminCategories.forEach(cat => {
         const cls = adminActiveCategory === cat.id ? 'px-4 py-1.5 rounded-full text-sm font-bold bg-[#0056a3] text-white shadow-sm shrink-0 select-none' : 'px-4 py-1.5 rounded-full text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200 shrink-0 select-none';
         
-        // ĐÃ SỬA: Thêm ontouchstart, ontouchend để tương thích 100% với iOS
         container.insertAdjacentHTML('beforeend', `
             <button 
                 onclick="setAdminCategory('${cat.id}')" 
@@ -262,7 +425,6 @@ function renderAdminFilterBar() {
         `);
     });
 
-    // Nút Topping (Màu cam tách biệt)
     const topCls = adminActiveCategory === 'topping' ? 'px-4 py-1.5 rounded-full text-sm font-bold bg-orange-500 text-white shadow-sm ml-auto shrink-0 select-none' : 'px-4 py-1.5 rounded-full text-sm font-bold text-orange-600 bg-orange-50 border border-orange-200 hover:bg-orange-100 ml-auto shrink-0 select-none';
     container.insertAdjacentHTML('beforeend', `<button onclick="setAdminCategory('topping')" class="${topCls} whitespace-nowrap" style="-webkit-touch-callout: none;">✨ Món thêm / Topping</button>`);
 }
@@ -274,67 +436,39 @@ function setAdminCategory(id) {
 }
 
 function renderAdminContent() {
-    const itemList = document.getElementById('admin-item-list');
-    const topList = document.getElementById('admin-topping-list');
+    const itemList = document.getElementById('admin-items-grid');
+    if(!itemList) return; // Nếu HTML cũ chưa có admin-items-grid thì bỏ qua để không lỗi
     const title = document.getElementById('admin-list-title');
-    const btnAdd = document.getElementById('btn-add-entity');
 
     if (adminActiveCategory === 'topping') {
-        itemList.classList.add('hidden');
-        topList.classList.remove('hidden');
-        topList.classList.add('flex');
-        title.innerText = 'Danh sách Món thêm / Topping';
-        btnAdd.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"></path></svg> <span>Thêm Topping</span>';
-        btnAdd.className = 'text-sm font-bold bg-orange-500 text-white px-3 py-2 rounded-lg shadow-md hover:bg-orange-600 flex items-center gap-1';
-        btnAdd.onclick = openToppingModal;
-
-        topList.innerHTML = '';
-        if (adminToppings.length === 0) topList.innerHTML = '<p class="text-center text-gray-400 py-5">Chưa có topping nào.</p>';
-        adminToppings.forEach(t => {
-            const usedCount = adminItems.filter(i => i.toppings && i.toppings.some(top => top.id === t.id)).length;
-            topList.insertAdjacentHTML('beforeend', `
-                <div onclick="editTopping('${t.id}')" class="bg-white border border-orange-200 rounded-lg p-3 flex justify-between items-center cursor-pointer hover:bg-orange-50 transition shadow-sm">
-                    <div>
-                        <h4 class="font-bold text-orange-700">${t.name}</h4>
-                        <p class="text-xs text-orange-500 mt-0.5">Đang áp dụng cho ${usedCount} món</p>
-                    </div>
-                    <span class="font-bold text-[#0056a3]">+${t.price.toLocaleString()}đ</span>
-                </div>
-            `);
-        });
-
-    } else {
-        itemList.classList.remove('hidden');
-        topList.classList.add('hidden');
-        topList.classList.remove('flex');
-        title.innerText = 'Danh sách món ăn chính';
-        btnAdd.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"></path></svg> <span>Thêm món</span>';
-        btnAdd.className = 'text-sm font-bold bg-[#0056a3] text-white px-3 py-2 rounded-lg shadow-md hover:bg-blue-700 flex items-center gap-1';
-        btnAdd.onclick = openItemModal;
-
-        itemList.innerHTML = '';
-        const filtered = adminActiveCategory === 'all' ? adminItems : adminItems.filter(i => i.category_id === adminActiveCategory);
-        
-        filtered.forEach(item => {
-            const catName = adminCategories.find(c => c.id === item.category_id)?.name || 'Khác';
-            const opacityClass = item.is_active ? '' : 'opacity-50 grayscale';
-            const topBadge = (item.toppings && item.toppings.length > 0) ? `<span class="absolute top-2 right-2 flex h-3 w-3"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span><span class="relative inline-flex rounded-full h-3 w-3 bg-orange-500"></span></span>` : '';
-            
-            itemList.insertAdjacentHTML('beforeend', `
-                <div onclick="editItem('${item.id}')" class="relative bg-white rounded-lg shadow-sm border border-gray-200 p-3 flex gap-3 cursor-pointer hover:shadow-md active:scale-95 transition ${opacityClass}">
-                    ${topBadge}
-                    <div class="w-14 h-14 bg-gray-50 rounded flex items-center justify-center text-3xl border border-gray-100 shrink-0">${item.img}</div>
-                    <div class="flex-1 overflow-hidden">
-                        <h4 class="font-bold text-gray-800 text-sm truncate">${item.name}</h4>
-                        <p class="text-xs text-gray-500 mb-1">${catName}</p>
-                        <div class="flex gap-2 items-end">
-                            <span class="text-sm font-bold text-[#0056a3]">${item.price.toLocaleString()}đ</span>
-                        </div>
-                    </div>
-                </div>
-            `);
-        });
+        title.innerText = 'Danh sách Món thêm / Topping (Tính năng đang bảo trì)';
+        itemList.innerHTML = '<p class="text-center text-gray-400 py-5 w-full">Vui lòng quay lại thẻ Tất cả món.</p>';
+        return;
     }
+
+    title.innerText = 'Danh sách món ăn chính';
+    itemList.innerHTML = '';
+    const filtered = adminActiveCategory === 'all' ? adminItems : adminItems.filter(i => i.category_id === adminActiveCategory);
+    
+    filtered.forEach(item => {
+        const catName = adminCategories.find(c => c.id === item.category_id)?.name || 'Khác';
+        const opacityClass = item.is_active ? '' : 'opacity-50 grayscale';
+        const topBadge = (item.toppings && item.toppings.length > 0) ? `<span class="absolute top-2 right-2 flex h-3 w-3"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span><span class="relative inline-flex rounded-full h-3 w-3 bg-orange-500"></span></span>` : '';
+        
+        itemList.insertAdjacentHTML('beforeend', `
+            <div onclick="editItem('${item.id}')" class="relative bg-white rounded-lg shadow-sm border border-gray-200 p-3 flex gap-3 cursor-pointer hover:shadow-md active:scale-95 transition ${opacityClass}">
+                ${topBadge}
+                <div class="w-14 h-14 bg-gray-50 rounded-xl flex items-center justify-center text-3xl border border-gray-100 shrink-0">${item.img || '🍲'}</div>
+                <div class="flex-1 overflow-hidden">
+                    <h4 class="font-bold text-gray-800 text-sm truncate">${item.name}</h4>
+                    <p class="text-xs text-gray-500 mb-1">${catName}</p>
+                    <div class="flex gap-2 items-end">
+                        <span class="text-sm font-bold text-[#0056a3]">${item.price.toLocaleString()}đ</span>
+                    </div>
+                </div>
+            </div>
+        `);
+    });
 }
 
 // --- QUẢN LÝ THẺ (Danh mục) ---
@@ -354,6 +488,7 @@ async function deleteCategory() {
 // --- QUẢN LÝ MÓN ĂN CHÍNH ---
 function openItemModal() {
     if (adminCategories.length === 0) return alert("Vui lòng tạo ít nhất 1 Thẻ (Danh mục) trước!");
+    
     document.getElementById('item-modal-title').innerText = "Thêm Món Mới";
     document.getElementById('item-id').value = ''; 
     document.getElementById('item-name').value = '';
@@ -361,17 +496,17 @@ function openItemModal() {
     document.getElementById('item-vip-price').value = '';
     document.getElementById('item-is-active').checked = true;
 
-    // --- 3 DÒNG NÀY LÀ PHÉP THUẬT CHO EMOJI PICKER ---
-    document.getElementById('item-icon').value = '🍲'; // Lưu bát phở vào input ẩn để đẩy lên Database
-    document.getElementById('btn-icon-select').innerText = '🍲'; // Hiện bát phở ra cái nút bấm
-    document.getElementById('emoji-picker').classList.add('hidden'); // Đảm bảo bảng chọn emoji đang đóng
+    // Phép thuật Emoji
+    document.getElementById('item-icon').value = '🍲'; 
+    document.getElementById('btn-icon-select').innerText = '🍲'; 
+    document.getElementById('emoji-picker').classList.add('hidden'); 
     
-    const sel = document.getElementById('item-category'); sel.innerHTML = '<option value="">- Chọn thẻ -</option>'; adminCategories.forEach(c => sel.insertAdjacentHTML('beforeend', `<option value="${c.id}">${c.name}</option>`));
+    // Đổ danh sách thẻ vào Select Box
+    const sel = document.getElementById('item-category'); 
+    sel.innerHTML = '<option value="">- Chọn thẻ -</option>'; 
+    adminCategories.forEach(c => sel.insertAdjacentHTML('beforeend', `<option value="${c.id}">${c.name}</option>`));
     
-    // Ẩn khu vực xem topping vì món mới chưa có topping
-    document.getElementById('item-modal-toppings-container').classList.add('hidden');
-    
-    document.getElementById('btn-delete-item').classList.add('hidden'); 
+    // Hiện Modal
     document.getElementById('item-modal').classList.remove('hidden');
     setTimeout(() => document.getElementById('item-name').focus(), 100);
 }
@@ -386,195 +521,53 @@ function editItem(id) {
     document.getElementById('item-vip-price').value = item.vip_price; 
     document.getElementById('item-is-active').checked = item.is_active;
 
-    // --- 3 DÒNG PHÉP THUẬT CHO EMOJI PICKER (KHI SỬA MÓN) ---
-    const iconToSet = item.img || '🍲'; // Lấy icon cũ của món, nếu trống thì để mặc định là bát phở
-    document.getElementById('item-icon').value = iconToSet; // Lưu vào ô input ẩn
-    document.getElementById('btn-icon-select').innerText = iconToSet; // Hiện icon cũ lên nút bấm
-    document.getElementById('emoji-picker').classList.add('hidden'); // Giấu bảng chọn đi
+    // Phép thuật Emoji
+    const iconToSet = item.img || '🍲';
+    document.getElementById('item-icon').value = iconToSet; 
+    document.getElementById('btn-icon-select').innerText = iconToSet; 
+    document.getElementById('emoji-picker').classList.add('hidden'); 
     
-    const sel = document.getElementById('item-category'); sel.innerHTML = '<option value="">- Chọn thẻ -</option>'; adminCategories.forEach(c => sel.insertAdjacentHTML('beforeend', `<option value="${c.id}" ${c.id===item.category_id?'selected':''}>${c.name}</option>`));
+    // Đổ danh sách thẻ
+    const sel = document.getElementById('item-category'); 
+    sel.innerHTML = '<option value="">- Chọn thẻ -</option>'; 
+    adminCategories.forEach(c => sel.insertAdjacentHTML('beforeend', `<option value="${c.id}" ${c.id === item.category_id ? 'selected' : ''}>${c.name}</option>`));
     
-    // XỬ LÝ HIỂN THỊ CÁC TOPPING ĐANG ÁP DỤNG TRONG MÓN NÀY
-    const topsContainer = document.getElementById('item-modal-toppings-container');
-    const topsList = document.getElementById('item-modal-toppings-list');
-    
-    if (item.toppings && item.toppings.length > 0) {
-        topsList.innerHTML = item.toppings.map(t => 
-            `<span class="px-2 py-1 bg-white border border-orange-200 text-orange-700 text-xs rounded shadow-sm font-medium">${t.name} (+${t.price.toLocaleString()}đ)</span>`
-        ).join('');
-    } else {
-        topsList.innerHTML = '<span class="text-xs text-gray-400 italic mt-1 pl-1">Món này chưa có Topping nào.</span>';
-    }
-    topsContainer.classList.remove('hidden');
-    
-    document.getElementById('btn-delete-item').classList.remove('hidden'); 
+    // Hiện Modal
     document.getElementById('item-modal').classList.remove('hidden');
 }
 
 function closeItemModal() { document.getElementById('item-modal').classList.add('hidden'); }
 
 async function saveItem() {
-    const id = document.getElementById('item-id').value, name = document.getElementById('item-name').value.trim(), price = parseInt(document.getElementById('item-price').value), vip_price = parseInt(document.getElementById('item-vip-price').value) || price, category_id = document.getElementById('item-category').value, img = document.getElementById('item-icon').value.trim() || '🍲', is_active = document.getElementById('item-is-active').checked;
-    if (!name || isNaN(price) || !category_id) return alert("Nhập đủ thông tin!");
-    if (id) await supabaseClient.from('menu_items').update({name, price, vip_price, category_id, img, is_active}).eq('id', id); else await supabaseClient.from('menu_items').insert([{name, price, vip_price, category_id, img, is_active}]);
-    closeItemModal(); loadAdminMenu();
-}
-
-async function deleteItem() { if(confirm("Xóa vĩnh viễn món này?")) { await supabaseClient.from('menu_items').delete().eq('id', document.getElementById('item-id').value); closeItemModal(); loadAdminMenu(); } }
-
-// --- QUẢN LÝ TOPPING (Gắn vào nhiều món) ---
-function openToppingModal() {
-    document.getElementById('topping-modal-title').innerText = "Thêm Topping Mới";
-    document.getElementById('topping-id').value = '';
-    document.getElementById('topping-name').value = '';
-    document.getElementById('topping-price').value = '';
-    document.getElementById('topping-search-item').value = '';
-    document.getElementById('btn-delete-topping').classList.add('hidden');
+    const id = document.getElementById('item-id').value;
+    const name = document.getElementById('item-name').value.trim();
+    const price = parseInt(document.getElementById('item-price').value);
+    const vip_price = parseInt(document.getElementById('item-vip-price').value) || price;
+    const category_id = document.getElementById('item-category').value;
+    const img = document.getElementById('item-icon').value.trim() || '🍲';
+    const is_active = document.getElementById('item-is-active').checked;
     
-    const filterCat = document.getElementById('topping-filter-cat');
-    filterCat.innerHTML = '<option value="all">Tất cả thẻ</option>';
-    adminCategories.forEach(c => filterCat.insertAdjacentHTML('beforeend', `<option value="${c.id}">${c.name}</option>`));
-
-    renderToppingItemCheckboxes(); 
-    document.getElementById('topping-modal').classList.remove('hidden');
-    setTimeout(() => document.getElementById('topping-name').focus(), 100);
-}
-
-function editTopping(toppingId) {
-    const top = adminToppings.find(t => t.id === toppingId);
-    if(!top) return;
+    if (!name || isNaN(price) || !category_id) return alert("Nhập đủ thông tin Tên, Giá và Chọn Thẻ!");
     
-    document.getElementById('topping-modal-title').innerText = "Sửa Topping";
-    document.getElementById('topping-id').value = top.id;
-    document.getElementById('topping-name').value = top.name;
-    document.getElementById('topping-price').value = top.price;
-    document.getElementById('topping-search-item').value = '';
-    document.getElementById('btn-delete-topping').classList.remove('hidden');
-
-    const filterCat = document.getElementById('topping-filter-cat');
-    filterCat.innerHTML = '<option value="all">Tất cả thẻ</option>';
-    adminCategories.forEach(c => filterCat.insertAdjacentHTML('beforeend', `<option value="${c.id}">${c.name}</option>`));
-
-    renderToppingItemCheckboxes(toppingId);
-    document.getElementById('topping-modal').classList.remove('hidden');
-}
-
-function closeToppingModal() { document.getElementById('topping-modal').classList.add('hidden'); }
-
-function renderToppingItemCheckboxes(currentToppingId = null) {
-    const container = document.getElementById('topping-item-checkboxes');
-    const searchTerm = removeVietnameseTones(document.getElementById('topping-search-item').value.toLowerCase());
-    const filterCat = document.getElementById('topping-filter-cat').value;
-    const tId = currentToppingId || document.getElementById('topping-id').value; 
-
-    container.innerHTML = '';
-    
-    adminItems.forEach(item => {
-        if (filterCat !== 'all' && item.category_id !== filterCat) return;
-        if (searchTerm && !removeVietnameseTones(item.name.toLowerCase()).includes(searchTerm)) return;
-
-        const hasThisTopping = item.toppings && item.toppings.some(t => t.id === tId);
-        const checkedState = hasThisTopping ? 'checked' : '';
-
-        container.insertAdjacentHTML('beforeend', `
-            <label class="flex items-center justify-between p-2 rounded hover:bg-white border border-transparent hover:border-orange-100 cursor-pointer transition">
-                <div class="flex items-center gap-2 flex-1">
-                    <input type="checkbox" value="${item.id}" class="topping-item-checkbox w-4 h-4 accent-orange-500" ${checkedState}>
-                    <span class="text-sm font-medium text-gray-700">${item.name}</span>
-                </div>
-            </label>
-        `);
-    });
-    
-    if(container.innerHTML === '') container.innerHTML = '<p class="text-xs text-gray-400 p-2">Không tìm thấy món phù hợp.</p>';
-}
-
-async function saveTopping() {
-    const id = document.getElementById('topping-id').value;
-    const name = document.getElementById('topping-name').value.trim();
-    const price = parseInt(document.getElementById('topping-price').value) || 0;
-
-    if (!name) return alert("Vui lòng nhập tên Topping!");
-
-    let finalToppingId = id;
     if (id) {
-        await supabaseClient.from('toppings').update({ name, price }).eq('id', id);
+        await supabaseClient.from('menu_items').update({name, price, vip_price, category_id, img, is_active}).eq('id', id); 
     } else {
-        const { data } = await supabaseClient.from('toppings').insert([{ name, price }]).select('id').single();
-        if(data) finalToppingId = data.id;
+        await supabaseClient.from('menu_items').insert([{name, price, vip_price, category_id, img, is_active}]);
     }
-
-    const checkedCheckboxes = document.querySelectorAll('.topping-item-checkbox:checked');
-    const selectedItemIds = Array.from(checkedCheckboxes).map(cb => cb.value);
-    const toppingObj = { id: finalToppingId, name: name, price: price };
-
-    const updatePromises = adminItems.map(item => {
-        let currentToppings = item.toppings || [];
-        const isSelected = selectedItemIds.includes(item.id);
-        const hasTopping = currentToppings.some(t => t.id === finalToppingId);
-
-        if (isSelected && !hasTopping) {
-            currentToppings.push(toppingObj);
-            return supabaseClient.from('menu_items').update({ toppings: currentToppings }).eq('id', item.id);
-        } else if (!isSelected && hasTopping) {
-            currentToppings = currentToppings.filter(t => t.id !== finalToppingId);
-            return supabaseClient.from('menu_items').update({ toppings: currentToppings }).eq('id', item.id);
-        } else if (isSelected && hasTopping) {
-            currentToppings = currentToppings.map(t => t.id === finalToppingId ? toppingObj : t);
-            return supabaseClient.from('menu_items').update({ toppings: currentToppings }).eq('id', item.id);
-        }
-        return null; 
-    }).filter(p => p !== null);
-
-    await Promise.all(updatePromises);
-    closeToppingModal();
-    loadAdminMenu(); 
-}
-
-async function deleteTopping() {
-    const tId = document.getElementById('topping-id').value;
-    if (!confirm("Xóa vĩnh viễn Topping này khỏi toàn bộ hệ thống?")) return;
-
-    await supabaseClient.from('toppings').delete().eq('id', tId);
-
-    const updatePromises = adminItems.map(item => {
-        let currentToppings = item.toppings || [];
-        if (currentToppings.some(t => t.id === tId)) {
-            const newToppings = currentToppings.filter(t => t.id !== tId);
-            return supabaseClient.from('menu_items').update({ toppings: newToppings }).eq('id', item.id);
-        }
-        return null;
-    }).filter(p => p !== null);
-
-    await Promise.all(updatePromises);
-    closeToppingModal();
+    
+    closeItemModal(); 
     loadAdminMenu();
 }
 
-// ==========================================
-// LOGIC CÀI ĐẶT (ZOOM UI)
-// ==========================================
-function setUIScale(size) {
-    // Đổi cỡ chữ gốc của thẻ html -> Toàn bộ Tailwind rem sẽ tự động phình to
-    document.documentElement.style.fontSize = size + 'px';
-    
-    // Lưu vào LocalStorage để F5 không bị mất
-    localStorage.setItem('pos_ui_scale', size);
-    
-    // Cập nhật con số hiển thị
-    document.getElementById('ui-scale-display').innerText = size + 'px';
+async function deleteItem() { 
+    if(confirm("Xóa vĩnh viễn món này?")) { 
+        await supabaseClient.from('menu_items').delete().eq('id', document.getElementById('item-id').value); 
+        closeItemModal(); 
+        loadAdminMenu(); 
+    } 
 }
 
-function loadUIScale() {
-    const savedSize = localStorage.getItem('pos_ui_scale') || '16';
-    document.documentElement.style.fontSize = savedSize + 'px';
-    
-    const slider = document.getElementById('ui-scale-slider');
-    if(slider) slider.value = savedSize;
-    
-    const display = document.getElementById('ui-scale-display');
-    if(display) display.innerText = savedSize + 'px';
-}
+
 // ==========================================
 // KHO EMOJI ĐỒ ĂN THỨC UỐNG
 // ==========================================
@@ -584,6 +577,7 @@ const foodEmojis = [
 
 function initEmojiPicker() {
     const grid = document.getElementById('emoji-grid');
+    if(!grid) return;
     grid.innerHTML = '';
     foodEmojis.forEach(emoji => {
         grid.insertAdjacentHTML('beforeend', `
@@ -597,12 +591,9 @@ function initEmojiPicker() {
 function toggleEmojiPicker() {
     const picker = document.getElementById('emoji-picker');
     if (picker.classList.contains('hidden')) {
-        
-        // ĐÃ SỬA DÒNG NÀY: Đếm thẻ con bên trong thay vì kiểm tra chữ rỗng
         if (document.getElementById('emoji-grid').children.length === 0) {
             initEmojiPicker();
         }
-        
         picker.classList.remove('hidden');
     } else {
         picker.classList.add('hidden');
@@ -610,16 +601,105 @@ function toggleEmojiPicker() {
 }
 
 function selectEmoji(emoji) {
-    document.getElementById('item-icon').value = emoji; // Lưu vào input ẩn
-    document.getElementById('btn-icon-select').innerText = emoji; // Hiện lên nút bấm
-    document.getElementById('emoji-picker').classList.add('hidden'); // Tắt bảng chọn
+    document.getElementById('item-icon').value = emoji; 
+    document.getElementById('btn-icon-select').innerText = emoji; 
+    document.getElementById('emoji-picker').classList.add('hidden'); 
 }
 
-// Click ra ngoài để đóng bảng Emoji
+// ==========================================
+// LOGIC CÀI ĐẶT (ZOOM UI)
+// ==========================================
+function setUIScale(size) {
+    document.documentElement.style.fontSize = size + 'px';
+    localStorage.setItem('pos_ui_scale', size);
+    if(document.getElementById('ui-scale-display')) {
+        document.getElementById('ui-scale-display').innerText = size + 'px';
+    }
+}
+
+function loadUIScale() {
+    const savedSize = localStorage.getItem('pos_ui_scale') || '16';
+    document.documentElement.style.fontSize = savedSize + 'px';
+    const slider = document.getElementById('ui-scale-slider');
+    if(slider) slider.value = savedSize;
+    const display = document.getElementById('ui-scale-display');
+    if(display) display.innerText = savedSize + 'px';
+}
+
+function toggleFullScreen() {
+    if (!document.fullscreenElement) {
+        if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
+        else if (document.documentElement.webkitRequestFullscreen) document.documentElement.webkitRequestFullscreen();
+    } else {
+        if (document.exitFullscreen) document.exitFullscreen();
+        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+    }
+}
+
+// --- KHỞI CHẠY KHI VÀO TRANG ---
+window.onload = () => { 
+    loadUIScale(); 
+    switchTab('khuvuc'); 
+};
+
+// Đóng bảng Emoji nếu click ra ngoài
 document.addEventListener('click', function(event) {
     const picker = document.getElementById('emoji-picker');
     const btn = document.getElementById('btn-icon-select');
-    if (!picker.classList.contains('hidden') && !picker.contains(event.target) && !btn.contains(event.target)) {
+    if (picker && btn && !picker.classList.contains('hidden') && !picker.contains(event.target) && !btn.contains(event.target)) {
         picker.classList.add('hidden');
     }
 });
+
+// ==========================================
+// BỘ ĐẾM THỜI GIAN THỰC (TIMER) CHO CÁC THẺ BÀN
+// ==========================================
+function updateAllTimers() {
+    const timerElements = document.querySelectorAll('.time-counter');
+    if (timerElements.length === 0) return;
+
+    const now = new Date();
+    
+    timerElements.forEach(el => {
+        const startTime = new Date(el.getAttribute('data-time'));
+        
+        // Tính toán khoảng cách thời gian bằng mili-giây
+        const diffMs = now - startTime;
+        
+        // Tránh lỗi giờ âm
+        if (diffMs < 0) {
+            el.innerText = "00:00";
+            return;
+        }
+
+        const totalMinutes = Math.floor(diffMs / 60000);
+        const hours = Math.floor(totalMinutes / 60);
+        const mins = totalMinutes % 60;
+        
+        // Format hiển thị hh:mm
+        el.innerText = `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+        
+        // KIỂM TRA XEM ĐÂY LÀ ĐƠN SHIP HAY BÀN TẠI QUÁN
+        const isTakeaway = el.closest('#takeaway-grid') !== null;
+
+        if (isTakeaway) {
+            // 🛵 ĐƠN SHIP: Quá 30 phút là báo động đỏ nhấp nháy
+            if (totalMinutes >= 30) {
+                el.classList.add('text-red-600', 'animate-pulse');
+                el.classList.remove('text-red-500'); 
+            }
+        } else {
+            // 🍽️ BÀN TẠI QUÁN: Khách ngồi 1-2 tiếng bình thường. 
+            // (Tùy chọn: Để 180 phút - tức 3 tiếng mới chuyển màu cam nhắc khéo, còn không thì bỏ qua)
+            if (totalMinutes >= 180) {
+                el.classList.add('text-orange-500');
+                el.classList.remove('text-[#0056a3]');
+            }
+        }
+    });
+}
+
+// Cứ mỗi 30 giây (30000ms), hệ thống sẽ quét và cập nhật lại thời gian một lần
+// Dùng setInterval() gán cho một biến để tránh bị chạy chồng chéo nếu chuyển tab
+if (window.posTimerInterval) clearInterval(window.posTimerInterval);
+window.posTimerInterval = setInterval(updateAllTimers, 30000);
