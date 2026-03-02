@@ -355,9 +355,16 @@ async function deleteCategory() {
 function openItemModal() {
     if (adminCategories.length === 0) return alert("Vui lòng tạo ít nhất 1 Thẻ (Danh mục) trước!");
     document.getElementById('item-modal-title').innerText = "Thêm Món Mới";
-    document.getElementById('item-id').value = ''; document.getElementById('item-name').value = '';
-    document.getElementById('item-price').value = ''; document.getElementById('item-vip-price').value = '';
-    document.getElementById('item-icon').value = '🍲'; document.getElementById('item-is-active').checked = true;
+    document.getElementById('item-id').value = ''; 
+    document.getElementById('item-name').value = '';
+    document.getElementById('item-price').value = ''; 
+    document.getElementById('item-vip-price').value = '';
+    document.getElementById('item-is-active').checked = true;
+
+    // --- 3 DÒNG NÀY LÀ PHÉP THUẬT CHO EMOJI PICKER ---
+    document.getElementById('item-icon').value = '🍲'; // Lưu bát phở vào input ẩn để đẩy lên Database
+    document.getElementById('btn-icon-select').innerText = '🍲'; // Hiện bát phở ra cái nút bấm
+    document.getElementById('emoji-picker').classList.add('hidden'); // Đảm bảo bảng chọn emoji đang đóng
     
     const sel = document.getElementById('item-category'); sel.innerHTML = '<option value="">- Chọn thẻ -</option>'; adminCategories.forEach(c => sel.insertAdjacentHTML('beforeend', `<option value="${c.id}">${c.name}</option>`));
     
@@ -371,13 +378,19 @@ function openItemModal() {
 
 function editItem(id) {
     const item = adminItems.find(i => i.id === id); if(!item) return;
+    
     document.getElementById('item-modal-title').innerText = "Sửa Món"; 
     document.getElementById('item-id').value = item.id; 
     document.getElementById('item-name').value = item.name; 
     document.getElementById('item-price').value = item.price; 
     document.getElementById('item-vip-price').value = item.vip_price; 
-    document.getElementById('item-icon').value = item.img || ''; 
     document.getElementById('item-is-active').checked = item.is_active;
+
+    // --- 3 DÒNG PHÉP THUẬT CHO EMOJI PICKER (KHI SỬA MÓN) ---
+    const iconToSet = item.img || '🍲'; // Lấy icon cũ của món, nếu trống thì để mặc định là bát phở
+    document.getElementById('item-icon').value = iconToSet; // Lưu vào ô input ẩn
+    document.getElementById('btn-icon-select').innerText = iconToSet; // Hiện icon cũ lên nút bấm
+    document.getElementById('emoji-picker').classList.add('hidden'); // Giấu bảng chọn đi
     
     const sel = document.getElementById('item-category'); sel.innerHTML = '<option value="">- Chọn thẻ -</option>'; adminCategories.forEach(c => sel.insertAdjacentHTML('beforeend', `<option value="${c.id}" ${c.id===item.category_id?'selected':''}>${c.name}</option>`));
     
@@ -562,3 +575,51 @@ function loadUIScale() {
     const display = document.getElementById('ui-scale-display');
     if(display) display.innerText = savedSize + 'px';
 }
+// ==========================================
+// KHO EMOJI ĐỒ ĂN THỨC UỐNG
+// ==========================================
+const foodEmojis = [
+    '🍲','🍜','🍚','🍛','🍣','🍱','🥟','🍤','🍙','🍘','🍥','🥠','🍢','🍡','🍧','🍨','🍦','🥧','🍰','🍮','🎂','🧁','🍭','🍬','🍫','🍿','🍩','🍪','🥐','🍞','🥖','🥨','🥞','🧇','🧀','🍖','🍗','🥩','🥓','🍔','🍟','🍕','🌭','🥪','🌮','🌯','🥙','🧆','🥚','🍳','🥘','🥗','🥣','🧈','🧂','🥫','🍠','🥔','🧅','🧄','🥦','🥬','🥒','🌶️','🫑','🌽','🥕','🫒','🍅','🥥','🥑','🍆','🍏','🍎','🍐','🍊','🍋','🍌','🍉','🍇','🍓','🍈','🍒','🍑','🥭','🍍','🥝','🥤','🧋','🧃','🧉','🥛','☕','🍵','🍶','🍾','🍷','🍸','🍹','🍺','🍻','🥂','🥃','🧊','🌶️','🔥','🍋‍🟩'
+];
+
+function initEmojiPicker() {
+    const grid = document.getElementById('emoji-grid');
+    grid.innerHTML = '';
+    foodEmojis.forEach(emoji => {
+        grid.insertAdjacentHTML('beforeend', `
+            <button type="button" onclick="selectEmoji('${emoji}')" class="p-1 hover:bg-blue-50 rounded cursor-pointer transition transform hover:scale-125 active:scale-95">
+                ${emoji}
+            </button>
+        `);
+    });
+}
+
+function toggleEmojiPicker() {
+    const picker = document.getElementById('emoji-picker');
+    if (picker.classList.contains('hidden')) {
+        
+        // ĐÃ SỬA DÒNG NÀY: Đếm thẻ con bên trong thay vì kiểm tra chữ rỗng
+        if (document.getElementById('emoji-grid').children.length === 0) {
+            initEmojiPicker();
+        }
+        
+        picker.classList.remove('hidden');
+    } else {
+        picker.classList.add('hidden');
+    }
+}
+
+function selectEmoji(emoji) {
+    document.getElementById('item-icon').value = emoji; // Lưu vào input ẩn
+    document.getElementById('btn-icon-select').innerText = emoji; // Hiện lên nút bấm
+    document.getElementById('emoji-picker').classList.add('hidden'); // Tắt bảng chọn
+}
+
+// Click ra ngoài để đóng bảng Emoji
+document.addEventListener('click', function(event) {
+    const picker = document.getElementById('emoji-picker');
+    const btn = document.getElementById('btn-icon-select');
+    if (!picker.classList.contains('hidden') && !picker.contains(event.target) && !btn.contains(event.target)) {
+        picker.classList.add('hidden');
+    }
+});

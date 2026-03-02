@@ -198,9 +198,23 @@
                     <input type="number" id="item-price" placeholder="Giá thường *" autocomplete="off" class="w-full border border-gray-300 rounded-lg p-2 outline-none focus:border-[#0056a3]">
                     <input type="number" id="item-vip-price" placeholder="Giá VIP" autocomplete="off" class="w-full border border-red-200 bg-red-50 rounded-lg p-2 outline-none focus:border-red-500">
                 </div>
-                <div class="flex gap-3">
-                    <select id="item-category" class="w-full border border-gray-300 rounded-lg p-2 outline-none bg-white flex-[2]"></select>
-                    <input type="text" id="item-icon" placeholder="🍲" value="🍲" class="w-full border border-gray-300 rounded-lg p-2 text-center flex-[1]">
+                <div class="flex gap-3 relative">
+                    <div class="flex-[2]">
+                        <select id="item-category" class="w-full h-full border border-gray-300 rounded-lg p-2 outline-none bg-white"></select>
+                    </div>
+                    <div class="flex-[1] relative">
+                        <button type="button" id="btn-icon-select" onclick="toggleEmojiPicker()" class="w-full h-full border border-gray-300 rounded-lg p-2 text-center text-2xl bg-white hover:bg-gray-50 focus:border-[#0056a3] outline-none transition flex items-center justify-center">🍲</button>
+                        <input type="hidden" id="item-icon" value="🍲">
+                        
+                        <div id="emoji-picker" class="hidden absolute right-0 bottom-[110%] mb-1 w-[280px] p-3 bg-white border border-gray-200 shadow-2xl rounded-xl z-50">
+                            <div class="text-xs text-gray-500 mb-2 font-bold flex justify-between items-center">
+                                <span>Chọn biểu tượng món:</span>
+                                <button type="button" onclick="toggleEmojiPicker()" class="text-red-400 hover:text-red-600">✖</button>
+                            </div>
+                            <div id="emoji-grid" class="grid grid-cols-7 gap-1.5 max-h-48 overflow-y-auto text-2xl text-center hide-scrollbar">
+                                </div>
+                        </div>
+                    </div>
                 </div>
                 <label class="flex items-center gap-2 cursor-pointer p-2 bg-gray-50 rounded-lg border border-gray-100">
                     <input type="checkbox" id="item-is-active" checked class="w-4 h-4 accent-green-600">
