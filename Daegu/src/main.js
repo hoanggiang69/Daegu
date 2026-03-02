@@ -42,7 +42,9 @@ function removeVietnameseTones(str) {
 // ĐIỀU HƯỚNG TAB
 // ==========================================
 function switchTab(tabName) {
-    const tabs = ['khuvuc', 'nhahang', 'thucdon'];
+    // ĐÃ FIX: Đảm bảo có đủ 4 tab ở đây để nó giấu đi cho sạch
+    const tabs = ['khuvuc', 'nhahang', 'thucdon', 'caidat']; 
+    
     tabs.forEach(tab => {
         document.getElementById(`nav-${tab}`).classList.remove('text-[#0056a3]');
         document.getElementById(`nav-${tab}`).classList.add('text-gray-400');
