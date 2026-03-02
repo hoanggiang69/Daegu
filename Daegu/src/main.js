@@ -234,16 +234,32 @@ function renderAdminFilterBar() {
     const container = document.getElementById('admin-category-list');
     container.innerHTML = '';
 
-    const allCls = adminActiveCategory === 'all' ? 'px-4 py-1.5 rounded-full text-sm font-bold bg-[#0056a3] text-white shadow-sm shrink-0' : 'px-4 py-1.5 rounded-full text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200 shrink-0';
-    container.insertAdjacentHTML('beforeend', `<button onclick="setAdminCategory('all')" class="${allCls}">Tất cả món</button>`);
+    // Nút Tất cả (Đã thêm select-none và khóa touch-callout của iOS)
+    const allCls = adminActiveCategory === 'all' ? 'px-4 py-1.5 rounded-full text-sm font-bold bg-[#0056a3] text-white shadow-sm shrink-0 select-none' : 'px-4 py-1.5 rounded-full text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200 shrink-0 select-none';
+    container.insertAdjacentHTML('beforeend', `<button onclick="setAdminCategory('all')" class="${allCls}" style="-webkit-touch-callout: none;">Tất cả món</button>`);
 
+    // Các thẻ danh mục bình thường
     adminCategories.forEach(cat => {
-        const cls = adminActiveCategory === cat.id ? 'px-4 py-1.5 rounded-full text-sm font-bold bg-[#0056a3] text-white shadow-sm shrink-0' : 'px-4 py-1.5 rounded-full text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200 shrink-0';
-        container.insertAdjacentHTML('beforeend', `<button onclick="setAdminCategory('${cat.id}')" oncontextmenu="editCategory('${cat.id}', '${cat.name}'); return false;" class="${cls}" title="Click giữ để sửa">${cat.name}</button>`);
+        const cls = adminActiveCategory === cat.id ? 'px-4 py-1.5 rounded-full text-sm font-bold bg-[#0056a3] text-white shadow-sm shrink-0 select-none' : 'px-4 py-1.5 rounded-full text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200 shrink-0 select-none';
+        
+        // ĐÃ SỬA: Thêm ontouchstart, ontouchend để tương thích 100% với iOS
+        container.insertAdjacentHTML('beforeend', `
+            <button 
+                onclick="setAdminCategory('${cat.id}')" 
+                oncontextmenu="editCategory('${cat.id}', '${cat.name}'); return false;" 
+                ontouchstart="pressTimer = setTimeout(() => editCategory('${cat.id}', '${cat.name}'), 600)"
+                ontouchend="clearTimeout(pressTimer)"
+                ontouchmove="clearTimeout(pressTimer)"
+                class="${cls}" 
+                style="-webkit-touch-callout: none;" 
+                title="Click giữ để sửa">${cat.name}
+            </button>
+        `);
     });
 
-    const topCls = adminActiveCategory === 'topping' ? 'px-4 py-1.5 rounded-full text-sm font-bold bg-orange-500 text-white shadow-sm ml-auto shrink-0' : 'px-4 py-1.5 rounded-full text-sm font-bold text-orange-600 bg-orange-50 border border-orange-200 hover:bg-orange-100 ml-auto shrink-0';
-    container.insertAdjacentHTML('beforeend', `<button onclick="setAdminCategory('topping')" class="${topCls} whitespace-nowrap">✨ Món thêm / Topping</button>`);
+    // Nút Topping (Màu cam tách biệt)
+    const topCls = adminActiveCategory === 'topping' ? 'px-4 py-1.5 rounded-full text-sm font-bold bg-orange-500 text-white shadow-sm ml-auto shrink-0 select-none' : 'px-4 py-1.5 rounded-full text-sm font-bold text-orange-600 bg-orange-50 border border-orange-200 hover:bg-orange-100 ml-auto shrink-0 select-none';
+    container.insertAdjacentHTML('beforeend', `<button onclick="setAdminCategory('topping')" class="${topCls} whitespace-nowrap" style="-webkit-touch-callout: none;">✨ Món thêm / Topping</button>`);
 }
 
 function setAdminCategory(id) {
