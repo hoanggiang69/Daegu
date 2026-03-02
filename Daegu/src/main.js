@@ -191,7 +191,10 @@ async function executeTransfer() {
     if (!rem || rem.length === 0) await supabaseClient.from('tables_active').delete().eq('table_num', transferSource);
     closeTransferModal(); loadTablesFromCloud(); 
 }
-window.onload = () => { switchTab('khuvuc'); };
+window.onload = () => { 
+    loadUIScale(); // Load lại cỡ chữ đã lưu
+    switchTab('khuvuc'); 
+};
 
 // ==========================================
 // TAB 2: LOGIC NHÀ HÀNG (BÁO CÁO & BIỂU ĐỒ)
@@ -531,4 +534,29 @@ async function deleteTopping() {
     await Promise.all(updatePromises);
     closeToppingModal();
     loadAdminMenu();
+}
+
+// ==========================================
+// LOGIC CÀI ĐẶT (ZOOM UI)
+// ==========================================
+function setUIScale(size) {
+    // Đổi cỡ chữ gốc của thẻ html -> Toàn bộ Tailwind rem sẽ tự động phình to
+    document.documentElement.style.fontSize = size + 'px';
+    
+    // Lưu vào LocalStorage để F5 không bị mất
+    localStorage.setItem('pos_ui_scale', size);
+    
+    // Cập nhật con số hiển thị
+    document.getElementById('ui-scale-display').innerText = size + 'px';
+}
+
+function loadUIScale() {
+    const savedSize = localStorage.getItem('pos_ui_scale') || '16';
+    document.documentElement.style.fontSize = savedSize + 'px';
+    
+    const slider = document.getElementById('ui-scale-slider');
+    if(slider) slider.value = savedSize;
+    
+    const display = document.getElementById('ui-scale-display');
+    if(display) display.innerText = savedSize + 'px';
 }
