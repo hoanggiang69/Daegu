@@ -92,7 +92,6 @@ async function loadTablesFromCloud() {
         }
     }
 
-    // --- CÁC BIẾN GIAO DIỆN ---
     const emptyState = document.getElementById('empty-table-state');
     const takeawaySection = document.getElementById('takeaway-section');
     const dineinSection = document.getElementById('dinein-section');
@@ -102,22 +101,18 @@ async function loadTablesFromCloud() {
     takeawayGrid.innerHTML = '';
     dineinGrid.innerHTML = '';
 
-    // --- LOGIC HIỂN THỊ TRẠNG THÁI TRỐNG ---
     if (tables.length === 0) {
-        // Nếu không có bàn nào: Hiện nút to, ẩn hết các khu vực lưới
         if (emptyState) emptyState.classList.remove('hidden');
         if (takeawaySection) takeawaySection.classList.add('hidden');
         if (dineinSection) dineinSection.classList.add('hidden');
-        return; // Dừng hàm luôn
+        return; 
     }
 
-    // Nếu CÓ bàn: Ẩn nút to, bật khu vực lưới tại quán lên
     if (emptyState) emptyState.classList.add('hidden');
     if (dineinSection) dineinSection.classList.remove('hidden');
 
     let hasTakeaway = false;
 
-    // --- VÒNG LẶP VẼ THẺ BÀN (Giữ nguyên như cũ) ---
     tables.forEach(table => {
         const isTakeaway = table.table_num.startsWith('Ship -');
         const shortName = isTakeaway ? table.table_num.replace('Ship - ', '') : table.table_num;
@@ -125,7 +120,9 @@ async function loadTablesFromCloud() {
         const totalAmount = tableTotals[table.table_num] || 0;
         const createdDate = new Date(table.created_at);
         const formattedTime = `${String(createdDate.getHours()).padStart(2, '0')}:${String(createdDate.getMinutes()).padStart(2, '0')}`;
-        const vipBadge = table.is_vip ? `<span class="bg-gradient-to-r from-orange-400 to-red-500 text-white text-[10px] px-1.5 py-0.5 rounded font-bold ml-2 shadow-sm">VIP</span>` : '';
+        
+        // Đã đổi text-[10px] thành text-[0.65rem]
+        const vipBadge = table.is_vip ? `<span class="bg-gradient-to-r from-orange-400 to-red-500 text-white text-[0.65rem] px-1.5 py-0.5 rounded font-bold ml-2 shadow-sm">VIP</span>` : '';
 
         if (isTakeaway) {
             takeawayGrid.insertAdjacentHTML('beforeend', `
@@ -134,17 +131,17 @@ async function loadTablesFromCloud() {
                     <div class="flex justify-between items-start mb-2 w-full border-b border-orange-200 pb-2">
                         <div class="w-full overflow-hidden">
                             <span class="font-bold text-orange-700 text-base truncate block">${shortName}</span>
-                            <p class="text-[10px] text-orange-500 font-mono mt-0.5">Mã: ${table.order_id}</p>
+                            <p class="text-[0.65rem] text-orange-500 font-mono mt-0.5">Mã: ${table.order_id}</p>
                         </div>
                         <div class="flex flex-col items-end pl-1 shrink-0"><span class="text-xl">🛵</span></div>
                     </div>
                     <div class="w-full space-y-1 mt-1">
-                        <div class="flex justify-between text-[11px]">
+                        <div class="flex justify-between text-[0.7rem]">
                             <span class="text-orange-600/70 font-medium">Giờ đặt:</span>
                             <span class="font-bold text-orange-800">${formattedTime}</span>
                         </div>
-                        <div class="flex justify-between text-[11px]">
-                            <span class="text-orange-600/70 font-medium">Đợi ship/mang về:</span>
+                        <div class="flex justify-between text-[0.7rem]">
+                            <span class="text-orange-600/70 font-medium">Đợi ship:</span>
                             <span class="font-bold text-red-500 time-counter" data-time="${table.created_at}">00:00</span>
                         </div>
                     </div>
@@ -166,14 +163,14 @@ async function loadTablesFromCloud() {
                         </div>
                         <div class="flex flex-col items-end pl-1 shrink-0"><span class="text-xl">🍽️</span></div>
                     </div>
-                    <p class="text-[10px] text-gray-400 font-mono mb-2">Mã: ${table.order_id}</p>
+                    <p class="text-[0.65rem] text-gray-400 font-mono mb-2">Mã: ${table.order_id}</p>
                     <div class="w-full space-y-1">
-                        <div class="flex justify-between text-[11px]">
+                        <div class="flex justify-between text-[0.7rem]">
                             <span class="text-gray-500 font-medium">Giờ vào:</span>
                             <span class="font-bold text-gray-700">${formattedTime}</span>
                         </div>
-                        <div class="flex justify-between text-[11px]">
-                            <span class="text-gray-500 font-medium">Thời gian ngồi:</span>
+                        <div class="flex justify-between text-[0.7rem]">
+                            <span class="text-gray-500 font-medium">Thời gian:</span>
                             <span class="font-bold text-[#0056a3] time-counter" data-time="${table.created_at}">00:00</span>
                         </div>
                     </div>
