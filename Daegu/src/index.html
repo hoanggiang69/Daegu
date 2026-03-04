@@ -11,7 +11,6 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="POS Daegu">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3081/3081333.png">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <style>
         .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
         .hide-scrollbar::-webkit-scrollbar { display: none; }
@@ -55,15 +54,77 @@
         </div>
     </div>
 
-    <div id="nhahang-state" class="hidden flex-1 overflow-y-auto bg-gray-100 p-4">
-        <div class="flex justify-between items-center bg-white p-3 rounded-xl shadow-sm mb-4">
-            <span class="font-bold text-gray-700" id="display-date">Hôm nay</span>
-            <div class="relative">
-                <input type="text" id="report-date" class="hidden">
-                <button id="custom-date-btn" class="px-3 py-1.5 bg-gray-100 text-[#0056a3] rounded-lg text-sm font-bold">Chọn ngày</button>
+    <div id="nhahang-state" class="hidden flex-1 overflow-y-auto bg-gray-50 pb-20">
+        <div class="bg-white p-4 shadow-sm z-10 sticky top-0 border-b border-gray-100">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold text-[#0056a3]">Báo cáo doanh thu</h2>
+                <div class="relative">
+                    <input type="text" id="report-date" class="hidden">
+                    <button id="custom-date-btn" onclick="openCalendarModal()" class="flex items-center gap-2 bg-blue-50 text-[#0056a3] px-3 py-1.5 rounded-lg font-bold text-sm shadow-sm hover:bg-blue-100 transition">
+                        🗓️ <span id="display-date">Hôm nay</span>
+                    </button>
+                </div>
+            </div>
+            <div class="flex gap-4 items-center">
+                <div class="flex-1">
+                    <p class="text-xs text-gray-500 font-bold mb-1 uppercase tracking-wider">Tổng doanh thu hôm nay</p>
+                    <p class="text-3xl font-black text-[#0056a3]" id="dashboard-revenue">0đ</p>
+                    <p class="text-sm font-bold text-gray-400 mt-1"><span id="dashboard-orders">0</span> đơn hoàn tất</p>
+                </div>
+                <div class="w-24 h-24 shrink-0 relative">
+                    <canvas id="overviewPieChart"></canvas>
+                </div>
             </div>
         </div>
-        <div class="bg-white p-4 rounded-xl shadow-sm text-center italic text-gray-500">Khu vực biểu đồ Báo cáo đang hoàn thiện...</div>
+
+        <div class="p-4 space-y-5">
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-200">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="font-bold text-gray-800 text-base">🔥 Top Món Bán Chạy</h3>
+                    <select id="filter-top-items" onchange="renderTopItems()" class="bg-gray-50 border border-gray-200 text-xs rounded-lg px-2 py-1.5 outline-none font-bold text-[#0056a3] shadow-sm">
+                        <option value="day">Hôm nay</option>
+                        <option value="week">Tuần này</option>
+                        <option value="month">Tháng này</option>
+                        <option value="year">Năm nay</option>
+                    </select>
+                </div>
+                <div class="h-48 mb-5 relative">
+                    <canvas id="topItemsPieChart"></canvas>
+                </div>
+                <div id="top-items-list" class="space-y-2">
+                    </div>
+                <button id="btn-show-more-items" onclick="toggleTopItemsView()" class="w-full mt-4 py-2.5 text-sm font-bold text-[#0056a3] bg-blue-50 rounded-xl hover:bg-blue-100 transition hidden">Xem thêm (Top 10)</button>
+            </div>
+
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-200">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="font-bold text-gray-800 text-base">📈 Tổng Doanh Thu</h3>
+                    <select id="filter-revenue" onchange="renderRevenueChart()" class="bg-gray-50 border border-gray-200 text-xs rounded-lg px-2 py-1.5 outline-none font-bold text-[#0056a3] shadow-sm">
+                        <option value="week">7 Ngày (Tuần)</option>
+                        <option value="month">Từng Tuần (Tháng)</option>
+                        <option value="year">Từng Tháng (Năm)</option>
+                    </select>
+                </div>
+                <div class="h-64 relative w-full">
+                    <canvas id="revenueBarChart"></canvas>
+                </div>
+            </div>
+
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-200">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="font-bold text-gray-800 text-base">🛵 Nguồn Đơn Hàng</h3>
+                    <select id="filter-source" onchange="renderSourceChart()" class="bg-gray-50 border border-gray-200 text-xs rounded-lg px-2 py-1.5 outline-none font-bold text-[#0056a3] shadow-sm">
+                        <option value="day">Hôm nay</option>
+                        <option value="week">Tuần này</option>
+                        <option value="month">Tháng này</option>
+                        <option value="year">Năm nay</option>
+                    </select>
+                </div>
+                <div class="h-64 relative w-full">
+                    <canvas id="sourceBarChart"></canvas>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div id="thucdon-state" class="hidden flex-1 flex flex-col overflow-hidden bg-gray-50">
@@ -238,8 +299,16 @@
         <div class="bg-white rounded-2xl p-6 w-[350px] max-w-full shadow-2xl relative">
             <h2 id="category-modal-title" class="text-xl font-bold text-[#0056a3] mb-4 text-center">Thêm Thẻ Mới</h2>
             <input type="hidden" id="cat-id">
+            <div class="mb-4">
+                <label class="block text-xs font-bold text-gray-500 mb-1">Tên thẻ:</label>
+                <input type="text" id="cat-name" autocomplete="off" class="w-full border-2 border-blue-200 rounded-xl p-3 text-lg outline-none focus:border-[#0056a3]" placeholder="Ví dụ: Đồ Uống, Lẩu...">
+            </div>
             <div class="mb-5">
-                <input type="text" id="cat-name" autocomplete="off" class="w-full border-2 border-blue-200 rounded-xl p-3 text-lg outline-none focus:border-[#0056a3]" placeholder="Tên thẻ (VD: Lẩu, Đồ Uống...)">
+                <label class="block text-xs font-bold text-gray-500 mb-1">Món trong thẻ này sẽ làm ở:</label>
+                <select id="cat-print-target" class="w-full border-2 border-gray-200 rounded-xl p-3 text-base outline-none focus:border-[#0056a3] bg-white font-medium text-gray-800">
+                    <option value="kitchen">🔥 BẾP</option>
+                    <option value="bar">🥤 QUẦY NƯỚC</option>
+                </select>
             </div>
             <div class="flex gap-3 mt-6">
                 <button onclick="closeCategoryModal()" class="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition">Hủy</button>
@@ -277,10 +346,40 @@
         </div>
     </div>
 
+    <div id="calendar-modal" class="hidden fixed inset-0 bg-black/50 z-[150] flex items-center justify-center p-4">
+        <div class="bg-white rounded-[2rem] p-5 w-[340px] shadow-2xl relative">
+            
+            <div class="flex justify-between items-center mb-4">
+                <button onclick="changeMonth(-1)" class="p-2 bg-gray-50 hover:bg-gray-100 rounded-full transition active:scale-95">
+                    <svg class="w-5 h-5 text-[#0056a3]" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"></path></svg>
+                </button>
+                <h3 id="calendar-month-year" class="text-lg font-black text-[#0056a3] uppercase tracking-wide">Tháng 1, 2024</h3>
+                <button onclick="changeMonth(1)" class="p-2 bg-gray-50 hover:bg-gray-100 rounded-full transition active:scale-95">
+                    <svg class="w-5 h-5 text-[#0056a3]" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"></path></svg>
+                </button>
+            </div>
+
+            <div class="grid grid-cols-7 gap-1 text-center mb-3">
+                <div class="text-xs font-black text-red-500">CN</div>
+                <div class="text-xs font-bold text-gray-400">T2</div>
+                <div class="text-xs font-bold text-gray-400">T3</div>
+                <div class="text-xs font-bold text-gray-400">T4</div>
+                <div class="text-xs font-bold text-gray-400">T5</div>
+                <div class="text-xs font-bold text-gray-400">T6</div>
+                <div class="text-xs font-bold text-blue-500">T7</div>
+            </div>
+
+            <div id="calendar-days" class="grid grid-cols-7 gap-y-2 gap-x-1 text-center">
+                </div>
+
+            <div class="mt-6 text-center">
+                <button onclick="closeCalendarModal()" class="w-full py-3 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition active:scale-95">Hủy</button>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-    <script src="https://npmcdn.com/flatpickr/dist/l10n/vn.js"></script>
     
     <script src="main.js"></script>
 </body>

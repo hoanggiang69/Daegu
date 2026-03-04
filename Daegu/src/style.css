@@ -10,7 +10,7 @@
     position: relative;
     margin-bottom: 12px;
     border-radius: 4px 4px 0 0;
-    user-select: none; /* Chống bôi đen text khi bấm giữ */
+    user-select: none;
     -webkit-user-select: none;
 }
 
@@ -30,23 +30,9 @@
 
 .receipt-wrapper {
     filter: drop-shadow(0px 1px 0px var(--card-border));
-    -webkit-touch-callout: none; /* Vô hiệu hóa menu mặc định của iOS khi bấm giữ */
+    -webkit-touch-callout: none;
 }
 
-/* Biểu đồ tròn CSS thuần (Dùng cho trang Dashboard) */
-.pie-chart {
-    width: 120px;
-    height: 120px;
-    border-radius: 50%;
-    /* Các phần trăm: Cam (Thịt nướng 40%), Xanh (Rượu Soju 35%), Đỏ (Mì cay 25%) */
-    background: conic-gradient(
-        #f97316 0% 40%, 
-        #0ea5e9 40% 75%, 
-        #ef4444 75% 100%
-    );
-}
-
-/* Ẩn scrollbar cho giao diện mượt như App Native */
 ::-webkit-scrollbar {
     width: 4px;
 }

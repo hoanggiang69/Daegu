@@ -57,16 +57,12 @@ function switchTab(tabName) {
         document.getElementById('tab-khuvuc-header').classList.remove('hidden');
         loadTablesFromCloud(); 
     } else if (tabName === 'nhahang') {
-        if (!isDatePickerInitialized) {
-            flatpickr("#report-date", { locale: "vn", dateFormat: "Y-m-d", defaultDate: "today", disableMobile: "true", 
-                onChange: function(sel, dateStr) { document.getElementById('display-date').innerText = formatDateVN(dateStr); loadDashboard(); }
-            });
-            document.getElementById('custom-date-btn').addEventListener('click', () => document.getElementById('report-date')._flatpickr.open());
-            isDatePickerInitialized = true;
+        // Mỗi lần bấm sang tab Báo cáo, mặc định gán ngày hôm nay nếu chưa có
+        if(!document.getElementById('report-date').value) {
+            const todayStr = getLocalDateString();
+            document.getElementById('display-date').innerText = formatDateVN(todayStr);
+            document.getElementById('report-date').value = todayStr;
         }
-        const todayStr = getLocalDateString();
-        document.getElementById('display-date').innerText = formatDateVN(todayStr);
-        document.getElementById('report-date').value = todayStr;
         loadDashboard(); 
     } else if (tabName === 'thucdon') {
         loadAdminMenu();
@@ -364,22 +360,225 @@ async function executeTransfer() {
 // ==========================================
 // TAB 2: LOGIC NHÀ HÀNG (BÁO CÁO & BIỂU ĐỒ)
 // ==========================================
+let charts = { overviewPie: null, topItemsPie: null, revenueBar: null, sourceBar: null };
+let topItemsDataRaw = [];
+let topItemsShowingAll = false;
+
+// Hàm tính toán mốc thời gian an toàn (Tránh lệch múi giờ)
+function getStartAndEndOf(filterType, baseDateStr) {
+    const [y, m, d] = baseDateStr ? baseDateStr.split('-') : getLocalDateString().split('-');
+    const base = new Date(y, m - 1, d);
+    let start, end;
+    
+    if (filterType === 'day') {
+        start = new Date(base); start.setHours(0,0,0,0);
+        end = new Date(base); end.setHours(23,59,59,999);
+    } else if (filterType === 'week') {
+        start = new Date(base);
+        const day = start.getDay(), diff = start.getDate() - day + (day === 0 ? -6 : 1);
+        start.setDate(diff); start.setHours(0,0,0,0); // Đầu tuần (Thứ 2)
+        end = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23,59,59,999);
+    } else if (filterType === 'month') {
+        start = new Date(base.getFullYear(), base.getMonth(), 1); start.setHours(0,0,0,0);
+        end = new Date(base.getFullYear(), base.getMonth() + 1, 0); end.setHours(23,59,59,999);
+    } else if (filterType === 'year') {
+        start = new Date(base.getFullYear(), 0, 1); start.setHours(0,0,0,0);
+        end = new Date(base.getFullYear(), 11, 31); end.setHours(23,59,59,999);
+    }
+    return { start, end };
+}
+
+// 1. TẢI TỔNG QUAN (Chạy khi đổi Ngày ở trên cùng)
 async function loadDashboard() {
     const selectedDate = document.getElementById('report-date').value;
     if (!selectedDate) return;
-    const startOfDay = new Date(`${selectedDate}T00:00:00+07:00`).toISOString();
-    const endOfDay = new Date(`${selectedDate}T23:59:59+07:00`).toISOString();
-    const { data: receipts } = await supabaseClient.from('receipts').select('total_amount, items_summary').gte('created_at', startOfDay).lte('created_at', endOfDay);
-    if (!receipts) return;
-    document.getElementById('dashboard-revenue').innerText = receipts.reduce((sum, r) => sum + r.total_amount, 0).toLocaleString() + ' đ';
-    document.getElementById('dashboard-orders').innerText = receipts.length + ' đơn';
-    const itemCounts = {};
-    receipts.forEach(r => { if (r.items_summary) r.items_summary.forEach(i => { if (!itemCounts[i.name]) itemCounts[i.name] = 0; itemCounts[i.name] += i.qty; }); });
-    const labels = Object.keys(itemCounts), chartData = Object.values(itemCounts), ctx = document.getElementById('salesChart');
-    if(ctx) {
-        if (salesChartInstance) salesChartInstance.destroy();
-        if (labels.length > 0) { salesChartInstance = new Chart(ctx, { type: 'doughnut', data: { labels: labels, datasets: [{ data: chartData, backgroundColor: ['#0056a3', '#f97316', '#10b981', '#ef4444', '#8b5cf6', '#f59e0b'], borderWidth: 2 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } } } } }); }
+    
+    const { start, end } = getStartAndEndOf('day', selectedDate);
+    const { data: receipts } = await supabaseClient.from('receipts')
+        .select('total_amount, table_num, created_at')
+        .gte('created_at', start.toISOString())
+        .lte('created_at', end.toISOString());
+        
+    let totalRev = 0, dineInRev = 0, takeawayRev = 0;
+    if (receipts) {
+        receipts.forEach(r => {
+            totalRev += r.total_amount;
+            if (r.table_num && r.table_num.startsWith('Ship')) takeawayRev += r.total_amount;
+            else dineInRev += r.total_amount;
+        });
     }
+    
+    document.getElementById('dashboard-revenue').innerText = totalRev.toLocaleString() + 'đ';
+    document.getElementById('dashboard-orders').innerText = receipts ? receipts.length : 0;
+    
+    // Biểu đồ tròn Nguồn đơn góc trên cùng
+    const ctxOv = document.getElementById('overviewPieChart');
+    if (charts.overviewPie) charts.overviewPie.destroy();
+    if (totalRev > 0) {
+        charts.overviewPie = new Chart(ctxOv, {
+            type: 'doughnut',
+            data: { labels: ['Tại bàn', 'Ship'], datasets: [{ data: [dineInRev, takeawayRev], backgroundColor: ['#0056a3', '#f97316'], borderWidth: 0 }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, cutout: '70%' }
+        });
+    }
+
+    // Kích hoạt render 3 biểu đồ bên dưới
+    renderTopItems();
+    renderRevenueChart();
+    renderSourceChart();
+}
+
+// 2. BIỂU ĐỒ TOP MÓN BÁN CHẠY
+async function renderTopItems() {
+    const filter = document.getElementById('filter-top-items').value;
+    const { start, end } = getStartAndEndOf(filter, document.getElementById('report-date').value);
+    
+    const { data: receipts } = await supabaseClient.from('receipts').select('items_summary').gte('created_at', start.toISOString()).lte('created_at', end.toISOString());
+        
+    let itemMap = {};
+    if (receipts) {
+        receipts.forEach(r => {
+            if(r.items_summary) {
+                r.items_summary.forEach(i => {
+                    if(!itemMap[i.name]) itemMap[i.name] = { qty: 0, rev: 0 };
+                    itemMap[i.name].qty += i.qty;
+                    itemMap[i.name].rev += (i.qty * i.price);
+                });
+            }
+        });
+    }
+    
+    topItemsDataRaw = Object.keys(itemMap).map(name => ({ name, qty: itemMap[name].qty, rev: itemMap[name].rev })).sort((a,b) => b.rev - a.rev);
+    topItemsShowingAll = false;
+    updateTopItemsUI();
+}
+
+function updateTopItemsUI() {
+    const limit = topItemsShowingAll ? 10 : 5;
+    const displayData = topItemsDataRaw.slice(0, limit);
+    const listContainer = document.getElementById('top-items-list');
+    listContainer.innerHTML = '';
+    
+    if (displayData.length === 0) {
+        listContainer.innerHTML = '<p class="text-center text-gray-400 text-sm py-4 italic">Chưa có dữ liệu bán hàng.</p>';
+        document.getElementById('btn-show-more-items').classList.add('hidden');
+    } else {
+        displayData.forEach((item, index) => {
+            const rankColors = ['bg-yellow-400', 'bg-gray-300', 'bg-orange-300'];
+            const rankCls = index < 3 ? rankColors[index] : 'bg-blue-50 text-blue-600';
+            const txtCls = index < 3 ? 'text-white' : '';
+            listContainer.insertAdjacentHTML('beforeend', `
+                <div class="flex items-center justify-between p-2.5 bg-gray-50 rounded-xl border border-gray-100">
+                    <div class="flex items-center gap-3 overflow-hidden">
+                        <div class="w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${rankCls} ${txtCls}">${index+1}</div>
+                        <div class="overflow-hidden">
+                            <p class="font-bold text-gray-800 text-sm truncate w-full">${item.name}</p>
+                            <p class="text-[11px] text-gray-500">Đã bán: <span class="font-bold">${item.qty}</span></p>
+                        </div>
+                    </div>
+                    <span class="font-bold text-[#0056a3] text-sm shrink-0 ml-2">${item.rev.toLocaleString()}đ</span>
+                </div>
+            `);
+        });
+        
+        const btn = document.getElementById('btn-show-more-items');
+        if (topItemsDataRaw.length > 5) {
+            btn.classList.remove('hidden');
+            btn.innerText = topItemsShowingAll ? 'Thu gọn' : 'Xem thêm (Top 10)';
+        } else btn.classList.add('hidden');
+    }
+    
+    const ctx = document.getElementById('topItemsPieChart');
+    if (charts.topItemsPie) charts.topItemsPie.destroy();
+    if (displayData.length > 0) {
+        charts.topItemsPie = new Chart(ctx, {
+            type: 'pie',
+            data: { labels: displayData.map(d => d.name), datasets: [{ data: displayData.map(d => d.rev), backgroundColor: ['#f97316', '#0056a3', '#10b981', '#ef4444', '#8b5cf6', '#f59e0b', '#3b82f6', '#14b8a6', '#f43f5e', '#64748b'] }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 10, font: { size: 10 } } } } }
+        });
+    }
+}
+
+function toggleTopItemsView() {
+    topItemsShowingAll = !topItemsShowingAll;
+    updateTopItemsUI();
+}
+
+// 3. BIỂU ĐỒ TỔNG DOANH THU CỘT
+async function renderRevenueChart() {
+    const filter = document.getElementById('filter-revenue').value;
+    const { start, end } = getStartAndEndOf(filter, document.getElementById('report-date').value);
+    
+    const { data: receipts } = await supabaseClient.from('receipts').select('total_amount, created_at').gte('created_at', start.toISOString()).lte('created_at', end.toISOString());
+        
+    let labels = [], dataRev = [];
+    if (filter === 'week') {
+        labels = ['Th 2', 'Th 3', 'Th 4', 'Th 5', 'Th 6', 'Th 7', 'CN']; dataRev = [0,0,0,0,0,0,0];
+        if(receipts) receipts.forEach(r => { let dayIdx = new Date(r.created_at).getDay() - 1; if(dayIdx === -1) dayIdx = 6; dataRev[dayIdx] += r.total_amount; });
+    } else if (filter === 'month') {
+        labels = ['Tuần 1', 'Tuần 2', 'Tuần 3', 'Tuần 4', 'Tuần 5']; dataRev = [0,0,0,0,0];
+        if(receipts) receipts.forEach(r => { const w = Math.floor((new Date(r.created_at).getDate() - 1) / 7); if(w < 5) dataRev[w] += r.total_amount; });
+    } else if (filter === 'year') {
+        labels = ['T1','T2','T3','T4','T5','T6','T7','T8','T9','T10','T11','T12']; dataRev = [0,0,0,0,0,0,0,0,0,0,0,0];
+        if(receipts) receipts.forEach(r => { dataRev[new Date(r.created_at).getMonth()] += r.total_amount; });
+    }
+
+    const ctx = document.getElementById('revenueBarChart');
+    if (charts.revenueBar) charts.revenueBar.destroy();
+    charts.revenueBar = new Chart(ctx, {
+        type: 'bar',
+        data: { labels: labels, datasets: [{ label: 'Doanh thu', data: dataRev, backgroundColor: '#0056a3', borderRadius: 4 }] },
+        options: { 
+            responsive: true, 
+            maintainAspectRatio: false, 
+            
+            // ĐÃ THÊM DÒNG NÀY: Bấm hụt cột một tí vẫn hiện số
+            interaction: { mode: 'index', intersect: false }, 
+            
+            scales: { y: { beginAtZero: true, ticks: { callback: v => (v/1000) + 'k' } } }, 
+            plugins: { legend: { display: false } } 
+        }
+    });
+}
+
+// 4. BIỂU ĐỒ NGUỒN ĐƠN (GỘP CỘT)
+async function renderSourceChart() {
+    const filter = document.getElementById('filter-source').value;
+    const { start, end } = getStartAndEndOf(filter, document.getElementById('report-date').value);
+    
+    const { data: receipts } = await supabaseClient.from('receipts').select('total_amount, table_num, created_at').gte('created_at', start.toISOString()).lte('created_at', end.toISOString());
+        
+    let labels = [], dineInData = [], takeawayData = [];
+    if (filter === 'day') {
+        labels = ['Hôm nay']; dineInData = [0]; takeawayData = [0];
+        if(receipts) receipts.forEach(r => { if (r.table_num && r.table_num.startsWith('Ship')) takeawayData[0] += r.total_amount; else dineInData[0] += r.total_amount; });
+    } else if (filter === 'week') {
+        labels = ['Th 2', 'Th 3', 'Th 4', 'Th 5', 'Th 6', 'Th 7', 'CN']; dineInData = Array(7).fill(0); takeawayData = Array(7).fill(0);
+        if(receipts) receipts.forEach(r => { let dayIdx = new Date(r.created_at).getDay() - 1; if(dayIdx === -1) dayIdx = 6; if (r.table_num && r.table_num.startsWith('Ship')) takeawayData[dayIdx] += r.total_amount; else dineInData[dayIdx] += r.total_amount; });
+    } else if (filter === 'month') {
+        labels = ['Tuần 1', 'Tuần 2', 'Tuần 3', 'Tuần 4', 'Tuần 5']; dineInData = Array(5).fill(0); takeawayData = Array(5).fill(0);
+        if(receipts) receipts.forEach(r => { const w = Math.floor((new Date(r.created_at).getDate() - 1) / 7); if(w < 5) { if (r.table_num && r.table_num.startsWith('Ship')) takeawayData[w] += r.total_amount; else dineInData[w] += r.total_amount; } });
+    } else if (filter === 'year') {
+        labels = ['T1','T2','T3','T4','T5','T6','T7','T8','T9','T10','T11','T12']; dineInData = Array(12).fill(0); takeawayData = Array(12).fill(0);
+        if(receipts) receipts.forEach(r => { const m = new Date(r.created_at).getMonth(); if (r.table_num && r.table_num.startsWith('Ship')) takeawayData[m] += r.total_amount; else dineInData[m] += r.total_amount; });
+    }
+
+    const ctx = document.getElementById('sourceBarChart');
+    if (charts.sourceBar) charts.sourceBar.destroy();
+    charts.sourceBar = new Chart(ctx, {
+        type: 'bar',
+        data: { labels: labels, datasets: [ { label: 'Tại bàn', data: dineInData, backgroundColor: '#0056a3', borderRadius: 4 }, { label: 'Mang về', data: takeawayData, backgroundColor: '#f97316', borderRadius: 4 } ] },
+        options: { 
+            responsive: true, 
+            maintainAspectRatio: false, 
+            
+            // ĐÃ THÊM DÒNG NÀY: Gom chung số Tại bàn và Ship khi chạm
+            interaction: { mode: 'index', intersect: false }, 
+            
+            scales: { y: { beginAtZero: true, ticks: { callback: v => (v/1000) + 'k' } } }, 
+            plugins: { legend: { position: 'top', labels: { boxWidth: 10, font: { size: 11 } } } } 
+        }
+    });
 }
 
 // ==========================================
@@ -398,6 +597,7 @@ async function loadAdminMenu() {
     renderAdminContent();
 }
 
+// --- VẼ THANH MENU THẺ (Đã khôi phục nút + Thêm Thẻ) ---
 function renderAdminFilterBar() {
     const container = document.getElementById('admin-category-list');
     container.innerHTML = '';
@@ -408,11 +608,14 @@ function renderAdminFilterBar() {
     adminCategories.forEach(cat => {
         const cls = adminActiveCategory === cat.id ? 'px-4 py-1.5 rounded-full text-sm font-bold bg-[#0056a3] text-white shadow-sm shrink-0 select-none' : 'px-4 py-1.5 rounded-full text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200 shrink-0 select-none';
         
+        // Mặc định nếu thẻ cũ chưa có print_target thì coi như là của Bếp
+        const pTarget = cat.print_target || 'kitchen'; 
+        
         container.insertAdjacentHTML('beforeend', `
             <button 
                 onclick="setAdminCategory('${cat.id}')" 
-                oncontextmenu="editCategory('${cat.id}', '${cat.name}'); return false;" 
-                ontouchstart="pressTimer = setTimeout(() => editCategory('${cat.id}', '${cat.name}'), 600)"
+                oncontextmenu="editCategory('${cat.id}', '${cat.name}', '${pTarget}'); return false;" 
+                ontouchstart="pressTimer = setTimeout(() => editCategory('${cat.id}', '${cat.name}', '${pTarget}'), 600)"
                 ontouchend="clearTimeout(pressTimer)"
                 ontouchmove="clearTimeout(pressTimer)"
                 class="${cls}" 
@@ -421,6 +624,9 @@ function renderAdminFilterBar() {
             </button>
         `);
     });
+
+    // NÚT THÊM THẺ ĐÃ ĐƯỢC HỒI SINH
+    container.insertAdjacentHTML('beforeend', `<button onclick="openCategoryModal()" class="px-4 py-1.5 rounded-full text-sm font-bold text-[#0056a3] bg-blue-50 hover:bg-blue-100 border border-blue-200 shrink-0 select-none ml-2">+ Thêm thẻ</button>`);
 
     const topCls = adminActiveCategory === 'topping' ? 'px-4 py-1.5 rounded-full text-sm font-bold bg-orange-500 text-white shadow-sm ml-auto shrink-0 select-none' : 'px-4 py-1.5 rounded-full text-sm font-bold text-orange-600 bg-orange-50 border border-orange-200 hover:bg-orange-100 ml-auto shrink-0 select-none';
     container.insertAdjacentHTML('beforeend', `<button onclick="setAdminCategory('topping')" class="${topCls} whitespace-nowrap" style="-webkit-touch-callout: none;">✨ Món thêm / Topping</button>`);
@@ -468,18 +674,51 @@ function renderAdminContent() {
     });
 }
 
-// --- QUẢN LÝ THẺ (Danh mục) ---
-function openCategoryModal() { document.getElementById('category-modal-title').innerText = "Thêm Thẻ Mới"; document.getElementById('cat-id').value = ''; document.getElementById('cat-name').value = ''; document.getElementById('btn-delete-cat').classList.add('hidden'); document.getElementById('category-modal').classList.remove('hidden'); }
-function editCategory(id, name) { document.getElementById('category-modal-title').innerText = "Sửa Thẻ"; document.getElementById('cat-id').value = id; document.getElementById('cat-name').value = name; document.getElementById('btn-delete-cat').classList.remove('hidden'); document.getElementById('category-modal').classList.remove('hidden'); }
-function closeCategoryModal() { document.getElementById('category-modal').classList.add('hidden'); }
-async function saveCategory() {
-    const id = document.getElementById('cat-id').value, name = document.getElementById('cat-name').value.trim();
-    if (!name) return alert("Vui lòng nhập tên thẻ!");
-    if (id) await supabaseClient.from('menu_categories').update({ name }).eq('id', id); else await supabaseClient.from('menu_categories').insert([{ name, sort_order: adminCategories.length + 1 }]);
-    closeCategoryModal(); loadAdminMenu();
+// --- QUẢN LÝ THẺ (Tích hợp phân luồng Bếp/Bar) ---
+function openCategoryModal() { 
+    document.getElementById('category-modal-title').innerText = "Thêm Thẻ Mới"; 
+    document.getElementById('cat-id').value = ''; 
+    document.getElementById('cat-name').value = ''; 
+    document.getElementById('cat-print-target').value = 'kitchen'; // Mặc định tạo thẻ mới là Bếp
+    document.getElementById('btn-delete-cat').classList.add('hidden'); 
+    document.getElementById('category-modal').classList.remove('hidden'); 
+    setTimeout(() => document.getElementById('cat-name').focus(), 100);
 }
+
+function editCategory(id, name, printTarget) { 
+    document.getElementById('category-modal-title').innerText = "Sửa Thẻ"; 
+    document.getElementById('cat-id').value = id; 
+    document.getElementById('cat-name').value = name; 
+    document.getElementById('cat-print-target').value = printTarget; // Lấy đúng nơi in của thẻ
+    document.getElementById('btn-delete-cat').classList.remove('hidden'); 
+    document.getElementById('category-modal').classList.remove('hidden'); 
+}
+
+function closeCategoryModal() { document.getElementById('category-modal').classList.add('hidden'); }
+
+async function saveCategory() {
+    const id = document.getElementById('cat-id').value;
+    const name = document.getElementById('cat-name').value.trim();
+    const print_target = document.getElementById('cat-print-target').value;
+    
+    if (!name) return alert("Vui lòng nhập tên thẻ!");
+    
+    // Đã thêm print_target vào lệnh lưu DB
+    if (id) {
+        await supabaseClient.from('menu_categories').update({ name, print_target }).eq('id', id); 
+    } else {
+        await supabaseClient.from('menu_categories').insert([{ name, print_target, sort_order: adminCategories.length + 1 }]);
+    }
+    closeCategoryModal(); 
+    loadAdminMenu();
+}
+
 async function deleteCategory() {
-    if (confirm("Xóa thẻ này?")) { await supabaseClient.from('menu_categories').delete().eq('id', document.getElementById('cat-id').value); closeCategoryModal(); loadAdminMenu(); }
+    if (confirm("Xóa thẻ này? Mọi món ăn trong thẻ sẽ mất danh mục!")) { 
+        await supabaseClient.from('menu_categories').delete().eq('id', document.getElementById('cat-id').value); 
+        closeCategoryModal(); 
+        loadAdminMenu(); 
+    }
 }
 
 // --- QUẢN LÝ MÓN ĂN CHÍNH ---
@@ -637,6 +876,17 @@ function toggleFullScreen() {
 window.onload = () => { 
     loadUIScale(); 
     switchTab('khuvuc'); 
+    
+    // ==========================================
+    // PHÉP THUẬT: TẮT AUTOCOMPLETE & CHÍNH TẢ TOÀN APP
+    // ==========================================
+    document.querySelectorAll('input, textarea').forEach(input => {
+        input.setAttribute('autocomplete', 'off'); // Tắt gợi ý lịch sử
+        input.setAttribute('spellcheck', 'false'); // Tắt gạch chân đỏ kiểm tra chính tả
+        
+        // Chrome dạo này rất "lì", thêm dòng này để trị triệt để:
+        input.setAttribute('data-form-type', 'other'); 
+    });
 };
 
 // Đóng bảng Emoji nếu click ra ngoài
@@ -700,3 +950,89 @@ function updateAllTimers() {
 // Dùng setInterval() gán cho một biến để tránh bị chạy chồng chéo nếu chuyển tab
 if (window.posTimerInterval) clearInterval(window.posTimerInterval);
 window.posTimerInterval = setInterval(updateAllTimers, 30000);
+
+// ==========================================
+// LOGIC LỊCH TỰ CODE (CUSTOM CALENDAR)
+// ==========================================
+let calCurrentDate = new Date();
+
+function openCalendarModal() {
+    const currentDateVal = document.getElementById('report-date').value;
+    if (currentDateVal) {
+        calCurrentDate = new Date(currentDateVal);
+    } else {
+        calCurrentDate = new Date();
+    }
+    renderCalendar(calCurrentDate);
+    document.getElementById('calendar-modal').classList.remove('hidden');
+}
+
+function closeCalendarModal() {
+    document.getElementById('calendar-modal').classList.add('hidden');
+}
+
+function changeMonth(step) {
+    calCurrentDate.setMonth(calCurrentDate.getMonth() + step);
+    renderCalendar(calCurrentDate);
+}
+
+function renderCalendar(date) {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    
+    document.getElementById('calendar-month-year').innerText = `Tháng ${month + 1}, ${year}`;
+    
+    // Tìm ngày đầu tiên của tháng là thứ mấy (0: CN, 1: T2...)
+    const firstDay = new Date(year, month, 1).getDay(); 
+    // Tìm tổng số ngày trong tháng
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    
+    const daysContainer = document.getElementById('calendar-days');
+    daysContainer.innerHTML = '';
+    
+    // Vẽ các ô trống ở đầu tháng
+    for (let i = 0; i < firstDay; i++) {
+        daysContainer.insertAdjacentHTML('beforeend', `<div></div>`);
+    }
+    
+    const selectedDateStr = document.getElementById('report-date').value;
+    const today = new Date();
+    
+    // Vẽ từng ngày
+    for (let i = 1; i <= daysInMonth; i++) {
+        // Format YYYY-MM-DD
+        const currentDateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+        
+        let isToday = (year === today.getFullYear() && month === today.getMonth() && i === today.getDate());
+        let isSelected = (currentDateStr === selectedDateStr);
+        
+        // Căn chỉnh CSS cho từng nút ngày (Tròn xoe, hiệu ứng hover mượt)
+        let baseClass = "w-9 h-9 mx-auto flex items-center justify-center rounded-full text-sm font-bold cursor-pointer transition active:scale-90 ";
+        
+        if (isSelected) {
+            baseClass += "bg-[#0056a3] text-white shadow-md"; // Ngày đang chọn: Nền xanh, chữ trắng
+        } else if (isToday) {
+            baseClass += "border-2 border-[#0056a3] text-[#0056a3]"; // Hôm nay: Viền xanh
+        } else {
+            baseClass += "text-gray-700 hover:bg-blue-50 hover:text-[#0056a3]"; // Ngày bình thường
+        }
+
+        daysContainer.insertAdjacentHTML('beforeend', `
+            <div onclick="selectDate('${currentDateStr}')" class="${baseClass}">
+                ${i}
+            </div>
+        `);
+    }
+}
+
+function selectDate(dateStr) {
+    // 1. Gắn ngày vừa chọn vào các ô input
+    document.getElementById('report-date').value = dateStr;
+    document.getElementById('display-date').innerText = formatDateVN(dateStr);
+    
+    // 2. Đóng lịch
+    closeCalendarModal();
+    
+    // 3. Kích hoạt tải lại Báo cáo ngay lập tức
+    loadDashboard(); 
+}
