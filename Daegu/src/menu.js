@@ -131,17 +131,17 @@ function renderMenu() {
 // ==========================================
 async function loadCartFromCloud() {
     const { data, error } = await supabaseClient.from('order_items').select('*').eq('table_num', currentTable).order('created_at', { ascending: true });
-    if (error) return alert("Lỗi tải giỏ hàng từ máy chủ!");
+    if (error) return alert("Lỗi tải giỏ hàng!");
 
     cart = data.map(item => ({
         db_id: item.id, id: item.item_id, name: item.name, currentPrice: item.price,
         quantity: item.quantity, toppings: item.toppings || [], note: item.note || '',
         isServed: item.is_served, isCustom: item.is_custom,
         time_added: item.time_added, 
+        print_target: item.print_target || 'kitchen', // ĐỌC CỘT PRINT_TARGET
         printed: item.printed || false, 
         is_cancelled: item.is_cancelled || false
     }));
-    
     renderCart();
 }
 
@@ -241,6 +241,10 @@ async function saveItemToCart() {
     const finalPricePerItem = modalBasePrice + toppingPrice;
     const currentTimeStr = new Date().toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'});
 
+    // --- BỔ SUNG: Tìm print_target từ danh mục của món ăn ---
+    const itemCategory = allCategories.find(cat => cat.id === activeMenuItem.category_id);
+    const target = (itemCategory && itemCategory.print_target) ? itemCategory.print_target : 'kitchen';
+
     const existingIndex = cart.findIndex(i => 
         i.id === activeMenuItem.id && JSON.stringify(i.toppings) === JSON.stringify(selectedToppings) && 
         i.note === note && i.isCustom !== true && i.printed === false && i.time_added === currentTimeStr 
@@ -255,7 +259,9 @@ async function saveItemToCart() {
         const newItem = {
             table_num: currentTable, item_id: activeMenuItem.id, name: activeMenuItem.name, price: finalPricePerItem,
             quantity: modalQuantity, toppings: selectedToppings, note: note, is_served: false, is_custom: false,
-            time_added: currentTimeStr, printed: false, is_cancelled: false
+            time_added: currentTimeStr, 
+            print_target: target, // LƯU NƠI IN VÀO SUPABASE
+            printed: false, is_cancelled: false
         };
         const { data, error } = await supabaseClient.from('order_items').insert([newItem]).select();
         if (!error && data) {
@@ -263,7 +269,9 @@ async function saveItemToCart() {
                 db_id: data[0].id, id: data[0].item_id, name: data[0].name, currentPrice: data[0].price,
                 quantity: data[0].quantity, toppings: data[0].toppings, note: data[0].note, 
                 isServed: data[0].is_served, isCustom: data[0].is_custom,
-                time_added: data[0].time_added, printed: data[0].printed, is_cancelled: data[0].is_cancelled
+                time_added: data[0].time_added, 
+                print_target: data[0].print_target, // CẬP NHẬT VÀO GIỎ HÀNG LOCAL
+                printed: data[0].printed, is_cancelled: data[0].is_cancelled
             });
         }
     }
@@ -633,8 +641,7 @@ function preparePrintData(onlyNew = false) {
         `;
 
         if (!onlyNew || !item.printed) {
-            const cat = (item.category || item.name || '').toLowerCase(); 
-            const isDrink = cat.includes('uống') || cat.includes('nước') || cat.includes('trà') || cat.includes('cafe') || cat.includes('coca') || cat.includes('bia');
+            const isDrink = (item.print_target === 'bar'); // CHỈ CẦN 1 DÒNG NÀY
             
             if (isDrink) { barContainer.innerHTML += ticketItemHtml; hasBar = true; } 
             else { kitchenContainer.innerHTML += ticketItemHtml; hasKitchen = true; }
@@ -681,8 +688,12 @@ function printTicket(type, preventPrint = false) {
         ticketBill.style.display = 'none';
     }
 
+    document.body.classList.add('is-printing'); // Ép hiện khung in
     if (!preventPrint) {
-        setTimeout(() => { window.print(); }, 300);
+        setTimeout(() => { 
+            window.print(); 
+            document.body.classList.remove('is-printing'); // Ẩn lại sau khi in
+        }, 300);
     }
 }
 
