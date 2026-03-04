@@ -13,32 +13,43 @@
     <meta name="apple-mobile-web-app-title" content="POS Daegu">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3081/3081333.png">
     <style>
-        @media print {
-            /* 1. Ép khổ giấy K80 */
-            @page { margin: 0; size: 80mm auto; }
-            
-            /* 2. Mở khóa chiều cao của Tailwind để hóa đơn dài không bị cắt đuôi */
-            html, body { height: auto !important; overflow: visible !important; background: white !important; margin: 0; padding: 0; }
-            
-            /* 3. Giấu toàn bộ giao diện web, chỉ chừa lại đúng cái Khung in */
-            body > *:not(#print-container):not(script):not(style) { display: none !important; }
-            
-            /* 4. Ép khung in hiện lên nét căng */
-            #print-container { 
-                display: block !important; 
-                position: absolute; 
-                left: 0; 
-                top: 0; 
-                width: 80mm; 
-                padding: 4mm; 
-                background: white; 
-                color: black; 
-            }
-            
-            /* 5. Chống in mờ */
-            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    /* TRỊ DỨT ĐIỂM LỖI HIỆN TỜ PHIẾU LÊN MÀN HÌNH */
+    #print-container { 
+        position: fixed;
+        top: 0;
+        left: -9999px; /* Đẩy ra xa tít tắp khỏi màn hình */
+        visibility: hidden;
+        opacity: 0;
+    }
+
+    @media print {
+        /* 1. Ép khổ giấy K80 */
+        @page { margin: 0; size: 80mm auto; }
+        
+        /* 2. Mở khóa chiều cao và nền trắng */
+        html, body { background: white !important; height: auto !important; overflow: visible !important; margin: 0 !important; padding: 0 !important; }
+        
+        /* 3. Khi in, giấu sạch giao diện chính */
+        body > *:not(#print-container):not(script):not(style) { display: none !important; }
+        
+        /* 4. Kéo khung in quay trở lại đúng vị trí để máy in lấy được */
+        #print-container { 
+            display: block !important; 
+            position: relative !important; 
+            left: 0 !important; 
+            visibility: visible !important;
+            opacity: 1 !important;
+            width: 80mm !important; 
+            margin: 0 auto !important; 
+            padding: 4mm !important; 
+            background: white !important; 
+            color: black !important; 
         }
-    </style>
+        
+        /* 5. Chống in mờ */
+        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    }
+</style>
 </head>
 <body class="bg-gray-100 h-screen flex flex-col font-sans overflow-hidden">
 

@@ -664,44 +664,39 @@ function preparePrintData(onlyNew = false) {
 }
 
 // ==========================================
-// ĐIỀU KHIỂN IN ẤN
+// ĐIỀU KHIỂN IN (ĐÃ FIX LỖI TRẮNG TRANG KHI IN TÁCH)
 // ==========================================
-function printTicket(type, preventPrint = false) {
-    document.getElementById('menu-options-dropdown').classList.add('hidden');
+let isSavingOrder = false;
+function printTicket(type, onlyNew = false, preventPrint = false, skipPrepare = false) {
+    const dropdown = document.getElementById('menu-options-dropdown');
+    if(dropdown) dropdown.classList.add('hidden');
     
-    const isAuto = (type === 'auto');
-    const { hasKitchen, hasBar } = preparePrintData(isAuto); 
+    // Chỉ chuẩn bị dữ liệu nếu không yêu cầu "Bỏ qua" (Dùng cho in tách đơn)
+    let printInfo = { hasKitchen: false, hasBar: false };
+    if (!skipPrepare) {
+        printInfo = preparePrintData(onlyNew); 
+    } else {
+        // Nếu bỏ qua prepare, ta tự kiểm tra xem các khung HTML có chứa món không
+        printInfo.hasKitchen = document.getElementById('kitchen-items').children.length > 0;
+        printInfo.hasBar = document.getElementById('bar-items').children.length > 0;
+    }
     
     const ticketKitchen = document.getElementById('ticket-kitchen');
     const ticketBar = document.getElementById('ticket-bar');
     const ticketBill = document.getElementById('ticket-bill');
 
-    if (type === 'kitchen') {
-        ticketKitchen.style.display = 'block'; ticketBar.style.display = 'none'; ticketBill.style.display = 'none';
-    } else if (type === 'bar') {
-        ticketKitchen.style.display = 'none'; ticketBar.style.display = 'block'; ticketBill.style.display = 'none';
-    } else if (type === 'bill') {
-        ticketKitchen.style.display = 'none'; ticketBar.style.display = 'none'; ticketBill.style.display = 'block';
-    } else if (type === 'auto') {
-        ticketKitchen.style.display = hasKitchen ? 'block' : 'none';
-        ticketBar.style.display = hasBar ? 'block' : 'none';
-        ticketBill.style.display = 'none';
-    }
+    if (ticketKitchen) ticketKitchen.style.display = (type === 'kitchen' || (type === 'auto' && printInfo.hasKitchen)) ? 'block' : 'none';
+    if (ticketBar) ticketBar.style.display = (type === 'bar' || (type === 'auto' && printInfo.hasBar)) ? 'block' : 'none';
+    if (ticketBill) ticketBill.style.display = (type === 'bill') ? 'block' : 'none';
 
-    document.body.classList.add('is-printing'); // Ép hiện khung in
     if (!preventPrint) {
-        setTimeout(() => { 
-            window.print(); 
-            document.body.classList.remove('is-printing'); // Ẩn lại sau khi in
-        }, 300);
+        setTimeout(() => { window.print(); }, 300);
     }
 }
 
 // ==========================================
-// TRỞ VỀ VÀ BÁO BẾP
+// TRỞ VỀ: IN TÁCH ĐƠN (ĐÃ FIX LỖI MẤT DỮ LIỆU)
 // ==========================================
-let isSavingOrder = false;
-
 async function goBack() {
     if (isSavingOrder) return; 
     isSavingOrder = true;
@@ -709,27 +704,41 @@ async function goBack() {
     const unprintedItems = cart.filter(item => !item.printed && !item.is_cancelled);
 
     if (unprintedItems.length > 0) {
-        // Đổ chữ vào HTML trước khi đánh dấu Đã in
-        printTicket('auto', true); 
+        // BƯỚC QUAN TRỌNG: Đổ dữ liệu vào HTML ngay bây giờ khi item.printed còn là false
+        const { hasKitchen, hasBar } = preparePrintData(true); 
 
         const statusEl = document.getElementById('table-status');
         if (statusEl) statusEl.innerText = "Đang lưu máy chủ...";
 
+        // Đánh dấu đã in local và lưu DB
         unprintedItems.forEach(item => item.printed = true);
-
         for (let item of unprintedItems) {
-            try {
-                await supabaseClient.from('order_items').update({ printed: true }).eq('id', item.db_id);
-            } catch (err) {
-                console.error("Lỗi update DB món:", item.name);
-            }
+            await supabaseClient.from('order_items').update({ printed: true }).eq('id', item.db_id);
         }
 
-        setTimeout(() => {
+        // TIẾN HÀNH IN TÁCH (Truyền tham số 'true' cuối cùng để không bị xóa dữ liệu HTML)
+        if (hasKitchen && hasBar) {
+            printTicket('kitchen', true, false, true); 
+
+            window.onafterprint = () => {
+                // In xong tờ 1 thì set lệnh thoát cho tờ 2
+                window.onafterprint = () => { window.location.href = 'index.html'; };
+                setTimeout(() => {
+                    printTicket('bar', true, false, true); 
+                }, 800);
+            };
+        } 
+        else if (hasKitchen) {
+            printTicket('kitchen', true, false, true);
             window.onafterprint = () => { window.location.href = 'index.html'; };
-            window.print();
-            setTimeout(() => { window.location.href = 'index.html'; }, 1500);
-        }, 300);
+        } 
+        else if (hasBar) {
+            printTicket('bar', true, false, true);
+            window.onafterprint = () => { window.location.href = 'index.html'; };
+        } 
+        else {
+            window.location.href = 'index.html';
+        }
 
     } else {
         window.location.href = 'index.html';
